@@ -1,0 +1,10 @@
+# 依赖与构建
+node_modules/
+
+# 敏感信息（绝不进仓库）
+.env
+data/
+.cloudflared/
+
+# 日志
+*.log

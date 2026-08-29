@@ -1,0 +1,14 @@
+{
+  "name": "dsh-roam",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "DSH 手机远程控制台：把本机 DeepSeek Harness 装进口袋，随处操控（响应式网页 + 可选企业微信消息通道）",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "smoke:dsh": "node scripts/smoke-dsh.js",
+    "start": "node src/index.js"
+  }
+}
