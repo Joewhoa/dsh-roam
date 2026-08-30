@@ -1,21 +1,10 @@
 import { config } from './config.js';
 import { DshClient } from './dsh/client.js';
-import { WecomClient } from './wecom/client.js';
 import { JsonStore } from './store.js';
 import { Bridge } from './bridge.js';
-import { createWecomHandler } from './wecom/callback.js';
 import { createBridgeServer } from './server.js';
 
 const log = console;
-
-function checkWecomConfig() {
-  const missing = Object.entries(config.wecom)
-    .filter(([, v]) => !v)
-    .map(([k]) => k);
-  if (missing.length) {
-    log.warn(`[startup] 企业微信配置缺失: ${missing.join(', ')} —— 回调加解密与主动推送不可用，仅启动 DSH 侧与 HTTP 服务。请在 .env 补齐后重启。`);
-  }
-}
 
 async function main() {
   const dsh = new DshClient(config.dsh.baseUrl);
@@ -30,16 +19,14 @@ async function main() {
   }
 
   const store = new JsonStore(config.store.path);
-  const wecom = new WecomClient(config.wecom);
-  const bridge = new Bridge({ dsh, wecom, store, config, log });
+  // 不含企业微信桥接（Bridge 内部对 wecom 使用 no-op）。
+  const bridge = new Bridge({ dsh, store, config, log });
   await bridge.start();
 
-  const handler = createWecomHandler({ config, bridge, log });
-  const server = createBridgeServer({ handler, bridge, config, log });
+  const server = createBridgeServer({ bridge, config, log });
   server.listen(config.server.port, () => {
     log.info(`[startup] 桥接已启动: http://127.0.0.1:${config.server.port}`);
-    log.info(`[startup] 企业微信回调地址（经 Cloudflare Tunnel 暴露）应指向: /wecom/callback`);
-    log.info(`[startup] 手机网页: http://127.0.0.1:${config.server.port}/ （公网经隧道 chat.your-domain.com）`);
+    log.info('[startup] 手机/桌面浏览器经隧道访问（Tailscale：https://<机器名>.<tailnet>.ts.net/ 或 Cloudflare：你的域名）');
   });
 
   const shutdown = () => {
@@ -52,7 +39,6 @@ async function main() {
   process.on('SIGTERM', shutdown);
 }
 
-checkWecomConfig();
 main().catch((e) => {
   log.error('[startup] 启动失败:', e);
   process.exit(1);

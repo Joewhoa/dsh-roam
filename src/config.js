@@ -38,15 +38,7 @@ export const config = {
     cwd: process.env.DSH_CWD || undefined,
     agentPreset: process.env.DSH_AGENT_PRESET || undefined,
   },
-  wecom: {
-    corpId: process.env.WECOM_CORP_ID ?? '',
-    agentId: process.env.WECOM_AGENT_ID ?? '',
-    secret: process.env.WECOM_SECRET ?? '',
-    token: process.env.WECOM_TOKEN ?? '',
-    encodingAesKey: process.env.WECOM_ENCODING_AES_KEY ?? '',
-    // 置 1 时 sendText/sendMarkdown 只打印、不调企业微信 API（用于接真实账号前自测）。
-    dryRun: process.env.WECOM_DRY_RUN === '1',
-  },
+  // Tailscale 版：不含企业微信桥接。
   server: {
     port: Number(process.env.BRIDGE_PORT ?? 8787),
   },

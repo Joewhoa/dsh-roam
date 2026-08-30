@@ -46,7 +46,7 @@ function truncateBytes(str, maxBytes) {
 export class Bridge {
   constructor({ dsh, wecom, store, config, log = console, turnTimeoutMs = 10 * 60 * 1000 }) {
     this.dsh = dsh;
-    this.wecom = wecom;
+    this.wecom = wecom ?? { sendText: async () => {}, sendMarkdown: async () => {} }; // Tailscale 版可缺省（no-op）
     this.store = store;
     this.config = config;
     this.log = log;
@@ -61,6 +61,7 @@ export class Bridge {
     this.sessionLists = new Map(); // userId -> [sessionId]（最近一次「列表」结果，供「切换 N」解析）
     this.turnCosts = new Map();    // sessionId -> 当前 turn 的成本聚合 { turn, cost, tokens, model, lastTs }
     this.sessionCost = new Map(); // sessionId -> 本次对话累计消费 { amount, tokens, model }（各 turn 之和）
+    this.seenMsgIds = new Map();  // 企业微信 MsgId -> 时间戳（回调重试去重，10 分钟内同一条只处理一次）
     this.running = false;
   }
 
@@ -246,6 +247,23 @@ export class Bridge {
 
   /** 企业微信消息入口：命令优先 → 决策回复 → 普通消息。 */
   async dispatchMessage(msg) {
+    // 企业微信回调重试去重：同一 MsgId 10 分钟内只处理一次（防"自动多发"）
+    const msgId = String(msg.MsgId ?? '');
+    if (msgId) {
+      const now = Date.now();
+      const last = this.seenMsgIds.get(msgId);
+      if (last && now - last < 10 * 60 * 1000) {
+        this.log.info(`[bridge] 忽略重复回调 MsgId=${msgId}`);
+        return;
+      }
+      this.seenMsgIds.set(msgId, now);
+      // 顺手清理过期项，防止 Map 无限增长
+      if (this.seenMsgIds.size > 500) {
+        for (const [k, t] of this.seenMsgIds) {
+          if (now - t >= 10 * 60 * 1000) this.seenMsgIds.delete(k);
+        }
+      }
+    }
     const userId = msg.FromUserName;
     const type = msg.MsgType;
     if (type === 'text') {

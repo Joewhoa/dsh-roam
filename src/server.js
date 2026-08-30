@@ -28,8 +28,8 @@ function blockText(content) {
     .join(' ');
 }
 
-/** 桥接 HTTP 服务：/health + /wecom/callback + 手机网页 UI 及其 API。 */
-export function createBridgeServer({ handler, bridge, config, log = console }) {
+/** 桥接 HTTP 服务：/health + 手机网页 UI 及其 API（Tailscale 版，无企业微信）。 */
+export function createBridgeServer({ bridge, config, log = console }) {
   const webPassword = config.web.password ?? '';
 
   function isAuthed(req) {
@@ -45,22 +45,6 @@ export function createBridgeServer({ handler, bridge, config, log = console }) {
       if (req.method === 'GET' && path === '/health') {
         json(res, 200, { ok: true, name: 'dsh-roam' });
         return;
-      }
-
-      // ── 企业微信回调 ─────────────────────────────────────────
-      if (path === '/wecom/callback') {
-        const query = Object.fromEntries(url.searchParams);
-        if (req.method === 'GET') {
-          const r = handler.verifyEchostr(query);
-          if (!r.ok) { res.writeHead(403, { 'content-type': 'text/plain' }); res.end(r.error); return; }
-          res.writeHead(200, { 'content-type': 'text/plain' }); res.end(r.echostr); return;
-        }
-        if (req.method === 'POST') {
-          const body = await readBody(req);
-          const reply = handler.handleMessage(query, body);
-          if (reply && reply.ok === false) { res.writeHead(403, { 'content-type': 'text/plain' }); res.end(reply.error); return; }
-          res.writeHead(200, { 'content-type': 'text/xml; charset=utf-8' }); res.end(reply); return;
-        }
       }
 
       // ── 手机网页 UI（静态）────────────────────────────────────
@@ -167,6 +151,17 @@ export function createBridgeServer({ handler, bridge, config, log = console }) {
           try { body = JSON.parse(await readBody(req)); } catch { json(res, 400, { error: 'bad json' }); return; }
           if (!body.sessionId) { json(res, 400, { error: 'missing sessionId' }); return; }
           await bridge.dsh.sessionCancel({ sessionId: body.sessionId });
+          json(res, 200, { ok: true });
+          return;
+        }
+
+        // 排队发送消息（不等回复，回复由前端轮询自动显示；用于审批附带的文本指令）
+        if (req.method === 'POST' && path === '/web/api/send-queued') {
+          let body;
+          try { body = JSON.parse(await readBody(req)); } catch { json(res, 400, { error: 'bad json' }); return; }
+          const { sessionId, content } = body;
+          if (!sessionId || !content) { json(res, 400, { error: 'missing sessionId/content' }); return; }
+          await bridge.dsh.sessionPrompt({ sessionId, mode: 'queue', content: [{ type: 'text', text: content }] });
           json(res, 200, { ok: true });
           return;
         }

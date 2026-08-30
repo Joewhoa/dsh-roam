@@ -856,23 +856,36 @@ function renderApproval(a) {
   wrap.classList.add('pending-card');
   const bubble = wrap.querySelector('.bubble');
   bubble.textContent = `⚠️ 需要审批：${a.toolName}${a.reason ? '\n原因：' + a.reason : ''}`;
+  // 可选的文本指令输入：审批后作为一条排队消息发给 agent（如"允许但只读执行"）
+  const input = document.createElement('input');
+  input.className = 'qa-input';
+  input.placeholder = '可选：输入指令/说明（如：允许但不要写文件）';
+  bubble.appendChild(input);
   const opts = document.createElement('div'); opts.className = 'qa-opts';
   const allow = document.createElement('button'); allow.className = 'qa-btn allow'; allow.textContent = '允许一次';
-  allow.onclick = () => respondApproval(a.rpcId, a.approvalId, 'allowed-once');
+  allow.onclick = () => respondApproval(a.rpcId, a.approvalId, 'allowed-once', input.value.trim());
   const reject = document.createElement('button'); reject.className = 'qa-btn reject'; reject.textContent = '拒绝';
-  reject.onclick = () => respondApproval(a.rpcId, a.approvalId, 'rejected');
+  reject.onclick = () => respondApproval(a.rpcId, a.approvalId, 'rejected', input.value.trim());
   opts.appendChild(allow); opts.appendChild(reject);
   bubble.appendChild(opts);
   scrollBottom();
 }
 
-// 提交审批决定
-async function respondApproval(rpcId, approvalId, outcome) {
+// 提交审批决定；若带指令文本，审批后作为排队消息发给 agent（实现"文本指令"）
+async function respondApproval(rpcId, approvalId, outcome, instruction) {
   pendingRpcId = null;
   clearPendingCard();
   try {
     await api('/web/api/respond', { method: 'POST', body: { rpcId, value: { sessionId: currentSessionId, approvalId, outcome } } });
   } catch (e) {}
+  if (instruction) {
+    // 显示用户指令消息，并排队发送（当前 turn 结束后 agent 会处理，回复由轮询补）
+    appendMessage('user', instruction, true);
+    currentMessages.push({ role: 'user', text: instruction, seq: null });
+    try {
+      await api('/web/api/send-queued', { method: 'POST', body: { sessionId: currentSessionId, content: instruction } });
+    } catch (e) { toast('指令发送失败'); }
+  }
 }
 
 // ============ 模型/思考强度（消息框上方状态条 + 两栏菜单）============

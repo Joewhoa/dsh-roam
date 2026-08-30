@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "DSH 手机远程控制台：把本机 DeepSeek Harness 装进口袋，随处操控（响应式网页 + 可选企业微信消息通道）",
+  "description": "DSH 手机远程控制台：把本机 DeepSeek Harness 装进口袋，随处操控（支持 Tailscale 免域名 / Cloudflare 公网隧道两种接入）",
   "engines": {
     "node": ">=20"
   },
