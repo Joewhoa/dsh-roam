@@ -124,6 +124,12 @@ A self-hosted remote console for DeepSeek Harness (DSH): a responsive web UI for
 
 ---
 
+## 致谢 (Acknowledgments)
+
+Tailscale 部署方案（`tailscale serve` 集成与一键脚本）由 **Rehtd** 贡献。
+
+---
+
 ## License
 
 [MIT](LICENSE)
