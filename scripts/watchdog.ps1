@@ -41,8 +41,8 @@ if ($watchBridge -and -not (Test-Port 8787)) {
   Start-Process -FilePath "cmd.exe" -ArgumentList "/c","cd /d `"$ProjectDir`" && node src/index.js" -WindowStyle Minimized
 }
 
-# ---- 3. 隧道（按模式） ----
-if ($tunnelMode -eq 'tailscale') {
+# ---- 3. 隧道（按模式：tailscale / cloudflare / both / none） ----
+if ($tunnelMode -eq 'tailscale' -or $tunnelMode -eq 'both') {
   $serveOk = $false
   try { if ((tailscale serve status 2>&1 | Out-String) -match '8788') { $serveOk = $true } } catch {}
   if (-not $serveOk) {
@@ -50,7 +50,7 @@ if ($tunnelMode -eq 'tailscale') {
     tailscale serve --bg 8788 2>&1 | Out-Null
   }
 }
-elseif ($tunnelMode -eq 'cloudflare') {
+if ($tunnelMode -eq 'cloudflare' -or $tunnelMode -eq 'both') {
   if (-not (Get-Process cloudflared -ErrorAction SilentlyContinue)) {
     Write-Host "[watchdog] cloudflared 未运行，拉起..." -ForegroundColor Yellow
     $cf = "cloudflared tunnel --protocol http2 --edge-ip-version 4 --config `"$env:USERPROFILE\.cloudflared\config-dsh.yml`" run dsh-bridge"

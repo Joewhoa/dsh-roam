@@ -37,13 +37,14 @@ if [ "$WATCH_BRIDGE" != "0" ] && ! port_listening 8787; then
   ( cd "$PROJECT_DIR" && nohup node src/index.js >/dev/null 2>&1 & )
 fi
 
-# ---- 3. 隧道（按模式） ----
-if [ "$WATCH_TUNNEL" = "tailscale" ]; then
+# ---- 3. 隧道（按模式：tailscale / cloudflare / both / none） ----
+if [ "$WATCH_TUNNEL" = "tailscale" ] || [ "$WATCH_TUNNEL" = "both" ]; then
   if ! tailscale serve status 2>/dev/null | grep -q '8788'; then
     echo "[watchdog] tailscale serve 未生效，重新启用..."
     tailscale serve --bg 8788 >/dev/null 2>&1
   fi
-elif [ "$WATCH_TUNNEL" = "cloudflare" ]; then
+fi
+if [ "$WATCH_TUNNEL" = "cloudflare" ] || [ "$WATCH_TUNNEL" = "both" ]; then
   if ! pgrep -x cloudflared >/dev/null 2>&1; then
     echo "[watchdog] cloudflared 未运行，拉起..."
     nohup cloudflared tunnel --protocol http2 --edge-ip-version 4 --config ~/.cloudflared/config-dsh.yml run dsh-bridge >/dev/null 2>&1 &

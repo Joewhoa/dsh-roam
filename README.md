@@ -85,11 +85,11 @@ bash scripts/start-cloudflare.sh
 ```ini
 DSH=1                 # 守护 DSH web（3080）
 BRIDGE=1              # 守护桥接（8787）
-WATCH_TUNNEL=tailscale   # tailscale / cloudflare / none
+WATCH_TUNNEL=tailscale   # tailscale / cloudflare / both / none
 ```
 
 - `WATCH_TUNNEL=none` → 只守护 DSH + 桥接，不碰隧道（本地访问用）
-- `WATCH_TUNNEL=tailscale` 或 `cloudflare` → 额外守护对应隧道
+- `WATCH_TUNNEL=tailscale` 或 `cloudflare` → 额外守护对应隧道；`both` → 两条隧道都守护
 - 只守护其中一项 → 把其它项改成 `0`
 
 ### 定时触发
