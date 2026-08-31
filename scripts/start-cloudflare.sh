@@ -38,7 +38,7 @@ fi
 # 3. cloudflared 隧道
 if pgrep -x cloudflared >/dev/null 2>&1; then echo "[3/3] 隧道          已在运行"; else
   echo "[3/3] 启动隧道 ..."
-  "$CLOUDFLARED" tunnel --protocol http2 --config "$TUNNEL_CFG" run "$TUNNEL_NAME" >/dev/null 2>&1 & sleep 2
+  "$CLOUDFLARED" tunnel --protocol http2 --edge-ip-version 4 --config "$TUNNEL_CFG" run "$TUNNEL_NAME" >/dev/null 2>&1 & sleep 2
 fi
 
 # 健康报告

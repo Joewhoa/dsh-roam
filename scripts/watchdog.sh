@@ -46,7 +46,7 @@ if [ "$WATCH_TUNNEL" = "tailscale" ]; then
 elif [ "$WATCH_TUNNEL" = "cloudflare" ]; then
   if ! pgrep -x cloudflared >/dev/null 2>&1; then
     echo "[watchdog] cloudflared 未运行，拉起..."
-    nohup cloudflared tunnel --protocol http2 --config ~/.cloudflared/config-dsh.yml run dsh-bridge >/dev/null 2>&1 &
+    nohup cloudflared tunnel --protocol http2 --edge-ip-version 4 --config ~/.cloudflared/config-dsh.yml run dsh-bridge >/dev/null 2>&1 &
   fi
 fi
 # none：跳过隧道守护

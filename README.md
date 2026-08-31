@@ -74,7 +74,7 @@ scripts\start-cloudflare.ps1
 bash scripts/start-cloudflare.sh
 ```
 
-脚本会拉起 `dsh web` + 桥接 + `cloudflared` 隧道。之后通过你的域名（如 `chat.你的域名`）访问。注意隧道需显式 `--protocol http2`（QUIC/7844 被墙）。
+脚本会拉起 `dsh web` + 桥接 + `cloudflared` 隧道。之后通过你的域名（如 `chat.你的域名`）访问。注意隧道需显式 `--protocol http2`（QUIC/7844 被墙）；部分网络下还要加 `--edge-ip-version 4` 强制走 IPv4（IPv6 到 Cloudflare 边缘可能超时）。
 
 ---
 

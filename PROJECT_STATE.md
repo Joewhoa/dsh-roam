@@ -23,6 +23,6 @@
 - 余额密钥读 `~/.dsh/.credentials.yaml`，不进仓库
 
 ## 踩坑
-- Cloudflare 隧道必须显式 `--protocol http2`（QUIC/7844 被墙）
+- Cloudflare 隧道必须显式 `--protocol http2`（QUIC/7844 被墙）；部分网络下还需 `--edge-ip-version 4` 强制 IPv4（IPv6 边缘超时）
 - 页面能开但 API 403 → 把 `*.ts.net` 域名加进 DSH `trustedHosts`
 - 换网络后隧道会自动重连；掉线则重启隧道/桥接即可

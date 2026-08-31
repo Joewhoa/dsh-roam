@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 #  DSH 手机控制台 一键启动脚本（Windows PowerShell）
 #  启动：dsh web + 桥接(node src/index.js) + cloudflared 隧道
 #  幂等：已运行的进程会自动跳过，可随时重复运行
@@ -46,7 +46,7 @@ if (Get-Process cloudflared -ErrorAction SilentlyContinue) {
   Write-Host "[3/3] 隧道          已在运行" -ForegroundColor Green
 } else {
   Write-Host "[3/3] 启动隧道 ..." -ForegroundColor Yellow
-  Start-Process -FilePath $Cloudflared -ArgumentList "tunnel","--protocol","http2","--config",$TunnelCfg,"run",$TunnelName -WindowStyle Minimized
+  Start-Process -FilePath $Cloudflared -ArgumentList "tunnel","--protocol","http2","--edge-ip-version","4","--config",$TunnelCfg,"run",$TunnelName -WindowStyle Minimized
   Start-Sleep -Seconds 2
 }
 

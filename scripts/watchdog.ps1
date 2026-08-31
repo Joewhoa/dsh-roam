@@ -53,7 +53,7 @@ if ($tunnelMode -eq 'tailscale') {
 elseif ($tunnelMode -eq 'cloudflare') {
   if (-not (Get-Process cloudflared -ErrorAction SilentlyContinue)) {
     Write-Host "[watchdog] cloudflared 未运行，拉起..." -ForegroundColor Yellow
-    $cf = "cloudflared tunnel --protocol http2 --config `"$env:USERPROFILE\.cloudflared\config-dsh.yml`" run dsh-bridge"
+    $cf = "cloudflared tunnel --protocol http2 --edge-ip-version 4 --config `"$env:USERPROFILE\.cloudflared\config-dsh.yml`" run dsh-bridge"
     Start-Process -FilePath "cmd.exe" -ArgumentList "/c",$cf -WindowStyle Minimized
   }
 }
