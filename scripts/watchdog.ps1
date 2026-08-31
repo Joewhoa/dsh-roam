@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 #  看门狗（Windows）：检查并自动拉起指定的服务
 #  - 配置在同目录 watchdog.conf：DSH / BRIDGE / WATCH_TUNNEL
 #  - 幂等：已运行的自动跳过，只重启挂掉的
@@ -32,14 +32,14 @@ function Test-Port([int]$Port) {
 # ---- 1. DSH web (3080) ----
 if ($watchDsh -and -not (Test-Port 3080)) {
   Write-Host "[watchdog] DSH web 未运行，拉起..." -ForegroundColor Yellow
-  Start-Process -FilePath "cmd.exe" -ArgumentList "/c","dsh web" -WindowStyle Minimized
+  Start-Process -FilePath "cmd.exe" -ArgumentList "/c","dsh web" -WindowStyle Hidden
   Start-Sleep -Seconds 6   # 等 DSH 就绪，避免桥接启动时 DSH 还没起来
 }
 
 # ---- 2. 桥接 (8787) ----
 if ($watchBridge -and -not (Test-Port 8787)) {
   Write-Host "[watchdog] 桥接未运行，拉起..." -ForegroundColor Yellow
-  Start-Process -FilePath "cmd.exe" -ArgumentList "/c","cd /d `"$ProjectDir`" && node src/index.js" -WindowStyle Minimized
+  Start-Process -FilePath "cmd.exe" -ArgumentList "/c","cd /d `"$ProjectDir`" && node src/index.js" -WindowStyle Hidden
 }
 
 # ---- 3. 隧道（按模式：tailscale / cloudflare / both / none） ----
@@ -55,7 +55,7 @@ if ($tunnelMode -eq 'cloudflare' -or $tunnelMode -eq 'both') {
   if (-not (Get-Process cloudflared -ErrorAction SilentlyContinue)) {
     Write-Host "[watchdog] cloudflared 未运行，拉起..." -ForegroundColor Yellow
     $cf = "cloudflared tunnel --protocol http2 --edge-ip-version 4 --config `"$env:USERPROFILE\.cloudflared\config-dsh.yml`" run dsh-bridge"
-    Start-Process -FilePath "cmd.exe" -ArgumentList "/c",$cf -WindowStyle Minimized
+    Start-Process -FilePath "cmd.exe" -ArgumentList "/c",$cf -WindowStyle Hidden
   }
 }
 # none：跳过隧道守护
