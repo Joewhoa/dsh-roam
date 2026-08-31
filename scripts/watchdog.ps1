@@ -33,6 +33,7 @@ function Test-Port([int]$Port) {
 if ($watchDsh -and -not (Test-Port 3080)) {
   Write-Host "[watchdog] DSH web 未运行，拉起..." -ForegroundColor Yellow
   Start-Process -FilePath "cmd.exe" -ArgumentList "/c","dsh web" -WindowStyle Minimized
+  Start-Sleep -Seconds 6   # 等 DSH 就绪，避免桥接启动时 DSH 还没起来
 }
 
 # ---- 2. 桥接 (8787) ----

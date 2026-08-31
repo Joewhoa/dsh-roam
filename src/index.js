@@ -9,14 +9,24 @@ const log = console;
 async function main() {
   const dsh = new DshClient(config.dsh.baseUrl);
 
-  // 冒烟：确认 DSH 可达。
-  try {
-    await dsh.sessionList({});
-    log.info(`[startup] DSH 可达: ${config.dsh.baseUrl}`);
-  } catch (e) {
-    log.error('[startup] DSH 不可达，退出:', e.message);
-    process.exit(1);
+  // 冒烟：确认 DSH 可达（启动时 DSH 可能还没就绪，重试最多 5 次）
+  let dshReady = false;
+  for (let i = 1; i <= 5; i++) {
+    try {
+      await dsh.sessionList({});
+      dshReady = true;
+      break;
+    } catch (e) {
+      if (i < 5) {
+        log.warn(`[startup] DSH 未就绪（${i}/5），3 秒后重试...`);
+        await new Promise((r) => setTimeout(r, 3000));
+      } else {
+        log.error('[startup] DSH 不可达，退出:', e.message);
+      }
+    }
   }
+  if (!dshReady) process.exit(1);
+  log.info(`[startup] DSH 可达: ${config.dsh.baseUrl}`);
 
   const store = new JsonStore(config.store.path);
   // 不含企业微信桥接（Bridge 内部对 wecom 使用 no-op）。

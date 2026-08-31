@@ -29,6 +29,7 @@ port_listening() {
 if [ "$WATCH_DSH" != "0" ] && ! port_listening 3080; then
   echo "[watchdog] DSH web 未运行，拉起..."
   nohup dsh web >/dev/null 2>&1 &
+  sleep 6   # 等 DSH 就绪，避免桥接启动时 DSH 还没起来
 fi
 
 # ---- 2. 桥接 (8787) ----
