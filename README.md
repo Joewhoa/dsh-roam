@@ -78,6 +78,45 @@ bash scripts/start-cloudflare.sh
 
 ---
 
+## 自动恢复（看门狗）
+
+服务崩了 / 隧道断了，人不在电脑前也能自动拉起。`scripts/watchdog.ps1`（Windows）和 `scripts/watchdog.sh`（macOS）按 `scripts/watchdog.conf` 检查并重启指定的服务：
+
+```ini
+DSH=1                 # 守护 DSH web（3080）
+BRIDGE=1              # 守护桥接（8787）
+WATCH_TUNNEL=tailscale   # tailscale / cloudflare / none
+```
+
+- `WATCH_TUNNEL=none` → 只守护 DSH + 桥接，不碰隧道（本地访问用）
+- `WATCH_TUNNEL=tailscale` 或 `cloudflare` → 额外守护对应隧道
+- 只守护其中一项 → 把其它项改成 `0`
+
+### 定时触发
+
+**Windows**（任务计划程序，每 5 分钟）：
+
+```powershell
+schtasks /Create /TN "dsh-roam-watchdog" /SC MINUTE /MO 5 /F `
+  /TR "powershell -NoProfile -ExecutionPolicy Bypass -File `"你的路径\dsh-roam\scripts\watchdog.ps1`""
+```
+
+**macOS**（launchd，每 5 分钟 + 登录时）：把下面 plist 存到 `~/Library/LaunchAgents/com.dsh.roam.watchdog.plist`，再 `launchctl load ~/Library/LaunchAgents/com.dsh.roam.watchdog.plist`。
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.dsh.roam.watchdog</string>
+  <key>ProgramArguments</key>
+  <array><string>/bin/bash</string><string>/path/to/dsh-roam/scripts/watchdog.sh</string></array>
+  <key>StartInterval</key><integer>300</integer>
+  <key>RunAtLoad</key><true/>
+</dict></plist>
+```
+
+---
+
 ## 技术要点
 
 - 后端纯 Node ESM、**零 npm 依赖**，`node src/index.js` 直接运行；前端是单文件 HTML，无构建步骤。
