@@ -11,7 +11,7 @@
 
 ## 演示
 
-![演示](docs/demo.gif)
+<p align="center"><img src="docs/demo.gif" width="360" /> <img src="docs/demo-2.gif" width="360" /></p>
 
 > 手机端操控本机 DSH Agent：会话列表 → 流式聊天 → 工具调用审批 → 完成。
 
