@@ -28,6 +28,11 @@ function blockText(content) {
     .join(' ');
 }
 
+/** 判断是否为 DSH 系统注入的上下文块（runtime context / system-reminder），这类不应显示为气泡。 */
+function isSystemContext(text) {
+  return typeof text === 'string' && (text.startsWith('Current runtime context') || text.startsWith('<system-reminder>'));
+}
+
 /** 桥接 HTTP 服务：/health + 手机网页 UI 及其 API（Tailscale 版，无企业微信）。 */
 export function createBridgeServer({ bridge, config, log = console }) {
   const webPassword = config.web.password ?? '';
@@ -96,7 +101,7 @@ export function createBridgeServer({ bridge, config, log = console }) {
             if (typeof ev.seq === 'number' && (oldestSeq === null || ev.seq < oldestSeq)) oldestSeq = ev.seq;
             if (ev.type === 'user/message') {
               const t = blockText(ev.data?.content);
-              if (t) messages.push({ role: 'user', text: t, seq: ev.seq });
+              if (t && !isSystemContext(t)) messages.push({ role: 'user', text: t, seq: ev.seq });
             } else if (ev.type === 'assistant/message') {
               const t = blockText(ev.data?.message?.content);
               if (t) messages.push({ role: 'assistant', text: t, seq: ev.seq });
@@ -267,7 +272,7 @@ export function createBridgeServer({ bridge, config, log = console }) {
               for (const entry of h.events ?? []) {
                 const ev = entry.event ?? {};
                 if (typeof ev.seq === 'number' && (oldestSeq === null || ev.seq < oldestSeq)) oldestSeq = ev.seq;
-                if (ev.type === 'user/message') { const t = blockText(ev.data?.content); if (t) messages.push({ role: 'user', text: t, seq: ev.seq }); }
+                if (ev.type === 'user/message') { const t = blockText(ev.data?.content); if (t && !isSystemContext(t)) messages.push({ role: 'user', text: t, seq: ev.seq }); }
                 else if (ev.type === 'assistant/message') { const t = blockText(ev.data?.message?.content); if (t) messages.push({ role: 'assistant', text: t, seq: ev.seq }); }
               }
               previews.push({
