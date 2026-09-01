@@ -1,8 +1,8 @@
 ﻿# ============================================================
 #  tray.ps1 —— dsh-roam 系统托盘监控（Windows）
-#  右键托盘图标：开启/关闭监控、立即检查一次、退出
+#  右键托盘图标：一键启动所有服务、开启/关闭监控、退出
 #  监控开启时每 5 分钟静默巡检（不弹任何窗口），谁挂了拉起谁
-#  用法：直接运行；建议通过开机自启（注册表 Run 键）启动
+#  用法：直接运行；建议通过开机自启（注册表 Run 键）启动（默认只驻留托盘，不自动拉起服务）
 # ============================================================
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -13,10 +13,10 @@ $ProjectDir = Split-Path $ScriptDir -Parent
 $IntervalMs = 300000          # 巡检间隔：5 分钟
 $StateFile  = Join-Path $ScriptDir '.monitor-state'   # 记住开关状态
 
-# ---- 读取上次的开关状态（默认开） ----
-$script:Monitoring = $true
+# ---- 读取上次的开关状态（默认关：登录后不自动拉起服务，由托盘一键启动） ----
+$script:Monitoring = $false
 if (Test-Path $StateFile) {
-  $script:Monitoring = ((Get-Content $StateFile -Raw).Trim() -ne 'off')
+  $script:Monitoring = ((Get-Content $StateFile -Raw).Trim() -eq 'on')
 }
 function Save-State {
   $state = if ($script:Monitoring) { 'on' } else { 'off' }
@@ -78,19 +78,24 @@ function Invoke-Check {
 
 # ---- 托盘图标 + 菜单 ----
 $notifyIcon = New-Object System.Windows.Forms.NotifyIcon
-$notifyIcon.Icon = [System.Drawing.SystemIcons]::Application
+$iconPath = Join-Path $ScriptDir 'whale.ico'
+if (Test-Path $iconPath) {
+  $notifyIcon.Icon = New-Object System.Drawing.Icon($iconPath)
+} else {
+  $notifyIcon.Icon = [System.Drawing.SystemIcons]::Application
+}
 $notifyIcon.Visible = $true
 
 $menu       = New-Object System.Windows.Forms.ContextMenuStrip
 $statusItem = New-Object System.Windows.Forms.ToolStripMenuItem
 $statusItem.Enabled = $false
 $toggleItem = New-Object System.Windows.Forms.ToolStripMenuItem
-$checkItem  = New-Object System.Windows.Forms.ToolStripMenuItem
-$checkItem.Text = '立即检查一次'
+$startItem  = New-Object System.Windows.Forms.ToolStripMenuItem
+$startItem.Text = '一键启动所有服务'
 $exitItem   = New-Object System.Windows.Forms.ToolStripMenuItem
 $exitItem.Text = '退出'
 $sep = New-Object System.Windows.Forms.ToolStripSeparator
-[void]$menu.Items.AddRange(@($statusItem, $toggleItem, $checkItem, $sep, $exitItem))
+[void]$menu.Items.AddRange(@($statusItem, $startItem, $toggleItem, $sep, $exitItem))
 $notifyIcon.ContextMenuStrip = $menu
 
 function Update-Menu {
@@ -106,7 +111,10 @@ function Update-Menu {
 }
 
 $toggleItem.Add_Click({ $script:Monitoring = -not $script:Monitoring; Save-State; Update-Menu })
-$checkItem.Add_Click({ Invoke-Check })
+$startItem.Add_Click({
+  Invoke-Check
+  $notifyIcon.ShowBalloonTip(2500, 'dsh-roam', '已检查并启动缺失的服务', 'Info')
+})
 Update-Menu
 
 # ---- 定时巡检 ----
@@ -122,3 +130,4 @@ $form.WindowState = 'Minimized'
 $form.Add_Shown({ $form.Hide() })
 $exitItem.Add_Click({ $notifyIcon.Visible = $false; $timer.Stop(); $form.Close(); $notifyIcon.Dispose() })
 [System.Windows.Forms.Application]::Run($form)
+

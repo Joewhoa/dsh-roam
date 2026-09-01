@@ -10,7 +10,7 @@ param([switch]$Silent)
 $ErrorActionPreference = 'SilentlyContinue'
 
 # ---- 路径配置（换机器时改这里）----
-$BridgeDir   = "D:\Software\AI Tools\DeepSeek Harness\phone\dsh-roam"
+$BridgeDir   = "D:\Software\AI Tools\DeepSeek Harness\dsh-roam"
 $Cloudflared = "C:\Users\Joe\cloudflared\cloudflared.exe"
 $TunnelCfg   = "C:\Users\Joe\.cloudflared\config-dsh.yml"
 $TunnelName  = "dsh-bridge"

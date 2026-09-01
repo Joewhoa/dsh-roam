@@ -8,3 +8,9 @@ data/
 
 # 日志
 *.log
+
+# 历史调研资料（不入库）
+_research/
+
+# 运行时状态（托盘监控开关）
+scripts/.monitor-state
