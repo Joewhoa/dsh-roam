@@ -11,7 +11,7 @@
 
 ## 演示
 
-<video src="docs/demo.mp4" controls width="100%"></video>
+![演示](docs/demo.gif)
 
 > 手机端操控本机 DSH Agent：会话列表 → 流式聊天 → 工具调用审批 → 完成。
 
