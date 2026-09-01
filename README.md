@@ -117,6 +117,24 @@ schtasks /Create /TN "dsh-roam-watchdog" /SC MINUTE /MO 5 /F `
 
 ---
 
+## 托盘控制台（Windows）
+
+想手动控制服务、不登录就自动拉起时，用系统托盘（Windows 推荐）：
+
+```powershell
+scripts\tray.ps1
+```
+
+- 鲸鱼图标（`scripts/whale.ico`）驻留系统托盘
+- 右键菜单：**一键启动所有服务** / **开启·关闭监控** / **退出**
+- 默认监控关闭：登录后只驻留托盘、不自动拉起服务；需要时点「一键启动」一次拉起 DSH + 桥接 + 隧道
+- 开启监控后，每 5 分钟静默巡检（不弹窗口），谁挂了拉起谁
+- 开机自启走注册表 `HKCU\...\Run` 的 `dsh-roam-tray` 键（无需管理员权限）
+
+> 有了托盘后，Windows 可不再用上面的 schtasks 定时任务；macOS 仍用 launchd + `watchdog.sh`。
+
+---
+
 ## 技术要点
 
 - 后端纯 Node ESM、**零 npm 依赖**，`node src/index.js` 直接运行；前端是单文件 HTML，无构建步骤。

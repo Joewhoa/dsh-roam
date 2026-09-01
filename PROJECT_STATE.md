@@ -10,11 +10,12 @@
 - 桥接：`node src/index.js`（127.0.0.1:8787）
 - 暴露：`tailscale serve --bg 8788` 或 cloudflared 隧道
 - 一键：`scripts/start-all.ps1`（Tailscale）/ `scripts/start-cloudflare.ps1`（Cloudflare）
+- 托盘（Windows）：`scripts/tray.ps1` —— 鲸鱼图标驻留系统托盘，右键「一键启动所有服务 / 开启监控 / 退出」，默认只驻留、不自动拉起服务
 
 ## 关键文件
 - `src/bridge.js`（核心）、`src/server.js`（HTTP）、`src/dsh/client.js`（DSH API 客户端）
 - `web/index.html`（前端单文件）
-- `scripts/`（一键启动 + 自测）
+- `scripts/`（一键启动 + 托盘 + 看门狗 + 自测）
 
 ## 技术要点
 - 零 npm 依赖、单文件前端
