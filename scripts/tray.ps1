@@ -1,6 +1,6 @@
 ﻿# ============================================================
 #  tray.ps1 —— dsh-roam 系统托盘监控（Windows）
-#  右键托盘图标：一键启动所有服务、开启/关闭监控、退出
+#  右键托盘图标：打开 DSH 页面、一键启动所有服务、开启/关闭监控、退出
 #  监控开启时每 5 分钟静默巡检（不弹任何窗口），谁挂了拉起谁
 #  用法：直接运行；建议通过开机自启（注册表 Run 键）启动（默认只驻留托盘，不自动拉起服务）
 # ============================================================
@@ -89,13 +89,15 @@ $notifyIcon.Visible = $true
 $menu       = New-Object System.Windows.Forms.ContextMenuStrip
 $statusItem = New-Object System.Windows.Forms.ToolStripMenuItem
 $statusItem.Enabled = $false
+$openItem   = New-Object System.Windows.Forms.ToolStripMenuItem
+$openItem.Text = '打开 DSH 页面'
 $toggleItem = New-Object System.Windows.Forms.ToolStripMenuItem
 $startItem  = New-Object System.Windows.Forms.ToolStripMenuItem
 $startItem.Text = '一键启动所有服务'
 $exitItem   = New-Object System.Windows.Forms.ToolStripMenuItem
 $exitItem.Text = '退出'
 $sep = New-Object System.Windows.Forms.ToolStripSeparator
-[void]$menu.Items.AddRange(@($statusItem, $startItem, $toggleItem, $sep, $exitItem))
+[void]$menu.Items.AddRange(@($statusItem, $openItem, $startItem, $toggleItem, $sep, $exitItem))
 $notifyIcon.ContextMenuStrip = $menu
 
 function Update-Menu {
@@ -110,10 +112,19 @@ function Update-Menu {
   }
 }
 
+$openItem.Add_Click({ Start-Process 'http://127.0.0.1:3080' })
 $toggleItem.Add_Click({ $script:Monitoring = -not $script:Monitoring; Save-State; Update-Menu })
 $startItem.Add_Click({
+  $wasUp = Test-Port 3080
   Invoke-Check
-  $notifyIcon.ShowBalloonTip(2500, 'dsh-roam', '已检查并启动缺失的服务', 'Info')
+  if (Test-Port 3080) {
+    if ($wasUp) {
+      Start-Process 'http://127.0.0.1:3080'
+      $notifyIcon.ShowBalloonTip(2500, 'dsh-roam', 'DSH 已在运行，已打开浏览器', 'Info')
+    } else {
+      $notifyIcon.ShowBalloonTip(2500, 'dsh-roam', '已启动缺失的服务（DSH: http://127.0.0.1:3080）', 'Info')
+    }
+  }
 })
 Update-Menu
 
@@ -130,4 +141,5 @@ $form.WindowState = 'Minimized'
 $form.Add_Shown({ $form.Hide() })
 $exitItem.Add_Click({ $notifyIcon.Visible = $false; $timer.Stop(); $form.Close(); $notifyIcon.Dispose() })
 [System.Windows.Forms.Application]::Run($form)
+
 
