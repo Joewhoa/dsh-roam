@@ -125,6 +125,16 @@ export class DshClient {
   workspaceList(payload, opts) { return this.call('workspace.list', payload, opts); }
   sessionModels(payload, opts) { return this.call('session.models', payload, opts); }
   sessionSelectModel(payload, opts) { return this.call('session.selectModel', payload, opts); }
+  /** DSH Typert remote: list slash commands available to a session agent. */
+  commandsList({ sessionId }, opts) {
+    return this.call('commands/list', { args: { agentId: sessionId } }, opts);
+  }
+  /** DSH Typert remote: execute a slash command against a session agent. */
+  commandsExecute({ sessionId, line, images = [] }, opts) {
+    return this.call('commands/execute', { args: { agentId: sessionId, line, images } }, opts);
+  }
+  /** Read the user-invocable skill catalog for a session. */
+  skillList(payload, opts) { return this.call('skill.list', payload, opts); }
 
   /**
    * 回应一个审批/提问请求。信封是 client-response（不是 client-request）：

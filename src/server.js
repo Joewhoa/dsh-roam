@@ -28,8 +28,9 @@ function blockText(content) {
     .join(' ');
 }
 
-/** 判断是否为 DSH 系统注入的上下文块（runtime context / system-reminder），这类不应显示为气泡。 */
-function isSystemContext(text) {
+/** 判断是否为 DSH 注入的非用户上下文，这类不应显示为用户气泡。 */
+function isInjectedContext(ev, text) {
+  if (ev?.data?.source?.kind === 'skill-invocation') return true;
   return typeof text === 'string' && (text.startsWith('Current runtime context') || text.startsWith('<system-reminder>'));
 }
 
@@ -74,15 +75,66 @@ export function createBridgeServer({ bridge, config, log = console }) {
             bridge.dsh.workspaceList({}),
           ]);
           const archived = new Set(ws.archivedSessionIds ?? []);
-          const items = sessions.items
-            .filter((it) => it.origin !== 'subagent' && !archived.has(it.sessionId))
-            .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
+          const workspaces = Array.isArray(ws.items) ? ws.items : [];
+          const visible = sessions.items
+            .filter((it) => it.origin !== 'subagent' && it.blank !== true && !archived.has(it.sessionId))
             .map((it) => ({
               sessionId: it.sessionId,
               title: (it.projections?.values?.title || '').toString().trim() || '(未命名)',
               running: !!it.running,
+              cwd: typeof it.cwd === 'string' ? it.cwd : '',
+              updatedAt: it.updatedAt ?? 0,
             }));
-          json(res, 200, { items });
+          const items = visible.slice().sort((a, b) => b.updatedAt - a.updatedAt);
+          // 路径归一化：去尾斜杠、统一分隔符、忽略大小写（Windows）。
+          const normPath = (p) => (typeof p === 'string' ? p.replace(/[\\/]+$/, '').replace(/\\/g, '/').toLowerCase() : '');
+          const workspaceByPath = new Map();
+          const sessionIdsByWorkspace = new Map();
+          for (const w of workspaces) {
+            if (normPath(w.path)) workspaceByPath.set(normPath(w.path), w);
+            sessionIdsByWorkspace.set(w.workspaceId, new Set(w.sessionIds ?? []));
+          }
+          // 归属：优先按会话 cwd 精确匹配工作区 path（实时，能覆盖「新建后尚未写入工作区
+          // 索引」的会话，避免最近会话掉进未分组）；cwd 缺失时回退到 workspace.sessionIds；
+          // 都不命中才归「未分组」。
+          const groupMap = new Map();   // workspaceId -> { workspaceId, title, sessions }
+          const groupOrder = [];
+          const ensureGroup = (workspaceId, title) => {
+            if (!groupMap.has(workspaceId)) {
+              groupMap.set(workspaceId, { workspaceId, title, sessions: [] });
+              groupOrder.push(workspaceId);
+            }
+            return groupMap.get(workspaceId);
+          };
+          for (const s of visible) {
+            let target = workspaceByPath.get(normPath(s.cwd)) ?? null;
+            if (!target) {
+              for (const w of workspaces) {
+                if (sessionIdsByWorkspace.get(w.workspaceId)?.has(s.sessionId)) { target = w; break; }
+              }
+            }
+            if (target) ensureGroup(target.workspaceId, target.title || '(未命名工作区)').sessions.push(s);
+            else ensureGroup('__ungrouped__', '未分组').sessions.push(s);
+          }
+          // 组内按更新时间倒序，组间按「组内最新会话」倒序：最近聊过的排在侧栏最前。
+          const groups = groupOrder
+            .map((workspaceId) => {
+              const g = groupMap.get(workspaceId);
+              const sorted = g.sessions.slice().sort((a, b) => b.updatedAt - a.updatedAt);
+              return {
+                workspaceId,
+                title: g.title,
+                sessions: sorted.map(({ cwd, updatedAt, ...session }) => session),
+                latest: sorted.reduce((max, s) => Math.max(max, s.updatedAt), 0),
+              };
+            })
+            .filter((g) => g.sessions.length > 0)
+            .sort((a, b) => b.latest - a.latest)
+            .map(({ latest, ...g }) => g);
+          json(res, 200, {
+            items: items.map(({ cwd, updatedAt, ...session }) => session),
+            groups,
+          });
           return;
         }
 
@@ -101,7 +153,7 @@ export function createBridgeServer({ bridge, config, log = console }) {
             if (typeof ev.seq === 'number' && (oldestSeq === null || ev.seq < oldestSeq)) oldestSeq = ev.seq;
             if (ev.type === 'user/message') {
               const t = blockText(ev.data?.content);
-              if (t && !isSystemContext(t)) messages.push({ role: 'user', text: t, seq: ev.seq });
+              if (t && !isInjectedContext(ev, t)) messages.push({ role: 'user', text: t, seq: ev.seq });
             } else if (ev.type === 'assistant/message') {
               const t = blockText(ev.data?.message?.content);
               if (t) messages.push({ role: 'assistant', text: t, seq: ev.seq });
@@ -141,6 +193,7 @@ export function createBridgeServer({ bridge, config, log = console }) {
             const result = await bridge.sendMessageStream(sessionId, content, (delta) => emit({ type: 'delta', text: delta }), blocks);
             if (result.kind === 'done') emit({ type: 'done', text: result.text ?? '' });
             else if (result.kind === 'error') emit({ type: 'error', error: result.error?.message ?? result.error?.code ?? 'unknown' });
+            else if (result.kind === 'cancelled') emit({ type: 'cancelled', text: result.text ?? '' });
             else emit({ type: 'timeout', text: result.text ?? '' });
           } catch (e) {
             emit({ type: 'error', error: e.message });
@@ -155,8 +208,9 @@ export function createBridgeServer({ bridge, config, log = console }) {
           let body;
           try { body = JSON.parse(await readBody(req)); } catch { json(res, 400, { error: 'bad json' }); return; }
           if (!body.sessionId) { json(res, 400, { error: 'missing sessionId' }); return; }
-          await bridge.dsh.sessionCancel({ sessionId: body.sessionId });
-          json(res, 200, { ok: true });
+          const receipt = await bridge.cancelSession(body.sessionId);
+          if (receipt?.accepted !== true) { json(res, 409, { ok: false, accepted: false }); return; }
+          json(res, 200, { ok: true, accepted: true });
           return;
         }
 
@@ -188,6 +242,21 @@ export function createBridgeServer({ bridge, config, log = console }) {
           if (!body.rpcId || !body.value) { json(res, 400, { error: 'missing rpcId/value' }); return; }
           const receipt = await bridge.dsh.respond(body.rpcId, body.value);
           json(res, 200, receipt);
+          return;
+        }
+
+        // 查询当前会话可用的斜杠命令与用户技能（输入候选菜单）
+        if (req.method === 'GET' && path === '/web/api/slash-options') {
+          const sessionId = url.searchParams.get('sessionId');
+          if (!sessionId) { json(res, 400, { error: 'missing sessionId' }); return; }
+          const [commands, skills] = await Promise.allSettled([
+            bridge.dsh.commandsList({ sessionId }),
+            bridge.dsh.skillList({ sessionId }),
+          ]);
+          json(res, 200, {
+            commands: commands.status === 'fulfilled' ? commands.value ?? [] : [],
+            skills: skills.status === 'fulfilled' ? skills.value.skills ?? [] : [],
+          });
           return;
         }
 
@@ -262,7 +331,7 @@ export function createBridgeServer({ bridge, config, log = console }) {
             bridge.dsh.workspaceList({}),
           ]);
           const archived = new Set(ws.archivedSessionIds ?? []);
-          const items = sessions.items.filter((it) => it.origin !== 'subagent' && !archived.has(it.sessionId) && it.sessionId !== except);
+          const items = sessions.items.filter((it) => it.origin !== 'subagent' && it.blank !== true && !archived.has(it.sessionId) && it.sessionId !== except);
           const previews = [];
           for (const it of items) {
             try {
@@ -272,7 +341,7 @@ export function createBridgeServer({ bridge, config, log = console }) {
               for (const entry of h.events ?? []) {
                 const ev = entry.event ?? {};
                 if (typeof ev.seq === 'number' && (oldestSeq === null || ev.seq < oldestSeq)) oldestSeq = ev.seq;
-                if (ev.type === 'user/message') { const t = blockText(ev.data?.content); if (t && !isSystemContext(t)) messages.push({ role: 'user', text: t, seq: ev.seq }); }
+                if (ev.type === 'user/message') { const t = blockText(ev.data?.content); if (t && !isInjectedContext(ev, t)) messages.push({ role: 'user', text: t, seq: ev.seq }); }
                 else if (ev.type === 'assistant/message') { const t = blockText(ev.data?.message?.content); if (t) messages.push({ role: 'assistant', text: t, seq: ev.seq }); }
               }
               previews.push({

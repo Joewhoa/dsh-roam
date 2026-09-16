@@ -82,15 +82,19 @@
   .toggle-label { font-size: 13px; color: var(--text-dim); }
   .toggle-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); }
   .tool-btn { font-size: 12px; color: var(--text-dim); border: 1px solid var(--border); padding: 5px 10px; border-radius: 8px; flex-shrink: 0; }
-  .clear-menu { display: none; position: absolute; right: 14px; top: 42px; min-width: 150px; background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 6px 18px rgba(0,0,0,.35); z-index: 70; overflow: hidden; }
-  .clear-menu.show { display: block; }
-  .clear-menu-head { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; font-size: 12px; color: var(--text-dim); border-bottom: 1px solid var(--border); }
-  .clear-close { cursor: pointer; padding: 0 2px; }
-  .clear-item { padding: 10px 12px; font-size: 13px; cursor: pointer; }
-  .clear-item:active { background: var(--panel2); }
   .sidebar-divider { height: 1px; background: var(--border); margin: 0 10px 6px; }
   .sess .unread { margin-left: auto; font-size: 11px; color: #fff; background: var(--accent); border-radius: 10px; padding: 1px 7px; flex-shrink: 0; }
   #sessions { flex: 1; overflow-y: auto; padding: 8px; }
+  .workspace-group { margin-bottom: 8px; }
+  .workspace-head { width: 100%; min-height: 34px; padding: 7px 8px; display: flex; align-items: center; gap: 6px; text-align: left; color: var(--text-dim); border-radius: 6px; cursor: pointer; }
+  .workspace-head:hover, .workspace-head:active { background: var(--panel2); }
+  .workspace-chevron { width: 12px; font-size: 11px; text-align: center; transition: transform .15s ease; }
+  .workspace-group.collapsed .workspace-chevron { transform: rotate(-90deg); }
+  .workspace-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; }
+  .workspace-count { color: var(--text-dim); font-size: 11px; opacity: .8; }
+  .workspace-sessions { padding-left: 8px; }
+  .workspace-group.collapsed .workspace-sessions { display: none; }
+  .ungrouped-head { margin-top: 4px; }
   .sess { padding: 11px 12px; border-radius: 10px; cursor: pointer; font-size: 14px; color: var(--text); margin-bottom: 2px; display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; }
   .sess.active { background: var(--panel2); }               /* 当前选中的会话高亮 */
   .sess .t { overflow: hidden; text-overflow: ellipsis; flex: 1; }
@@ -123,7 +127,8 @@
   #header .balance.loading::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 5px; border: 2px solid var(--text-dim); border-top-color: transparent; border-radius: 50%; vertical-align: -1px; animation: bspin 0.7s linear infinite; }
   @keyframes bspin { to { transform: rotate(360deg); } }
   #header .cancel { font-size: 13px; color: var(--danger); border: 1px solid var(--danger); border-radius: 8px; display: flex; align-items: center; justify-content: center; box-sizing: border-box; height: 26px; width: 0; overflow: hidden; opacity: 0; margin-left: 0; transition: width .18s ease, opacity .18s ease, margin-left .18s ease; flex-shrink: 0; }
-  #header .cancel.show { width: 52px; opacity: 1; margin-left: 10px; }   /* 出现：从右侧展开，把余额往左推 */
+  #header .cancel.show { width: 72px; opacity: 1; margin-left: 10px; }   /* 出现：从右侧展开，把余额往左推 */
+  #header .cancel:disabled { cursor: wait; opacity: .65; }
 
   /* 轻提示（复制/操作反馈） */
   .toast { position: fixed; top: 58px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.82); color: #fff; padding: 8px 16px; border-radius: 8px; font-size: 13px; z-index: 100; opacity: 0; pointer-events: none; transition: opacity .25s; }
@@ -148,6 +153,8 @@
   .msg { max-width: 86%; margin-bottom: 14px; display: flex; flex-direction: column; }
   .msg.user { align-items: flex-end; margin-left: auto; }     /* 用户消息靠右 */
   .msg.assistant { align-items: flex-start; }                 /* AI 消息靠左 */
+  .msg.system { align-items: center; max-width: 100%; margin: 2px 0 14px; }   /* 系统提示（居中） */
+  .msg.system .bubble { background: transparent; color: var(--text-dim); font-size: 12px; padding: 6px 12px; border: 1px dashed var(--border); border-radius: 20px; }
   /* 每条消息下方的小复制按钮 */
   .msg-copy { margin-top: 3px; font-size: 11px; color: var(--text-dim); background: none; border: none; padding: 3px 6px; cursor: pointer; opacity: 0.45; display: inline-flex; align-items: center; gap: 3px; }
   .msg-copy:active { opacity: 1; }
@@ -167,13 +174,36 @@
   @keyframes dotsPulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
   .load-more { text-align: center; padding: 8px; color: var(--text-dim); font-size: 13px; cursor: pointer; }
   .load-more:active { opacity: 0.6; }
+  /* 新消息浮出按钮：用户不在底部时，新消息到达后浮在消息区底部 */
+  .new-msg-btn { display: none; position: sticky; bottom: 12px; width: fit-content; margin: 8px auto 0; padding: 8px 16px; border-radius: 20px; background: var(--accent); color: #fff; font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,.35); cursor: pointer; z-index: 20; }
+  .new-msg-btn.show { display: block; }
 
   /* ── 输入区 ── */
-  #inputbar { padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); display: flex; gap: 10px; align-items: flex-end; background: var(--panel); }
-  #input { flex: 1; resize: none; max-height: 120px; padding: 11px 13px; border-radius: 12px; border: 1px solid var(--border); background: var(--panel2); color: var(--text); font-size: 15px; outline: none; line-height: 1.4; }
+  #inputbar { position: relative; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); display: flex; gap: 10px; align-items: flex-end; background: var(--panel); }
+  .composer { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  #input { width: 100%; resize: none; max-height: 120px; padding: 11px 13px; border-radius: 12px; border: 1px solid var(--border); background: var(--panel2); color: var(--text); font-size: 15px; outline: none; line-height: 1.4; }
   #send { width: 44px; height: 44px; border-radius: 12px; background: var(--accent); color: #fff; font-size: 18px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
   .attach-btn { width: 40px; height: 40px; border-radius: 12px; background: none; border: none; font-size: 18px; flex-shrink: 0; cursor: pointer; }
+  .attach-menu { display: none; position: absolute; left: 10px; bottom: calc(100% + 6px); min-width: 150px; padding: 5px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.35); z-index: 80; }
+  .attach-menu.show { display: block; }
+  .attach-option { width: 100%; padding: 10px 12px; display: flex; align-items: center; gap: 9px; border-radius: 6px; text-align: left; font-size: 14px; }
+  .attach-option:hover, .attach-option:active { background: var(--panel2); }
+  .attachment-tray { display: none; flex-wrap: wrap; gap: 6px; }
+  .attachment-tray.show { display: flex; }
+  .attachment-item { min-width: 0; max-width: 100%; height: 30px; padding: 0 5px 0 9px; display: flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel2); color: var(--text-dim); font-size: 12px; }
+  .attachment-kind { flex-shrink: 0; }
+  .attachment-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .attachment-remove { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-dim); font-size: 16px; }
+  .attachment-remove:hover, .attachment-remove:active { color: var(--danger); }
   #send:disabled { opacity: 0.4; }
+  .slash-menu { display: none; position: absolute; left: 12px; right: 12px; bottom: calc(100% + 6px); max-height: min(42vh, 320px); overflow-y: auto; padding: 5px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.35); z-index: 70; }
+  .slash-menu.show { display: block; }
+  .slash-item { width: 100%; min-height: 52px; padding: 8px 10px; display: grid; grid-template-columns: auto auto 1fr; align-items: baseline; gap: 8px; text-align: left; border-radius: 6px; }
+  .slash-item:hover, .slash-item.active { background: var(--panel2); }
+  .slash-name { color: var(--text); font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .slash-kind { padding: 1px 5px; color: var(--text-dim); border: 1px solid var(--border); border-radius: 4px; font-size: 10px; white-space: nowrap; }
+  .slash-desc { min-width: 0; color: var(--text-dim); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+  .slash-empty { padding: 12px 10px; color: var(--text-dim); font-size: 12px; text-align: center; }
 
   /* ── 侧栏遮罩（移动端抽屉）── */
   #mask { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 40; display: none; }
@@ -229,13 +259,7 @@
         <span class="toggle-label">预加载</span>
         <input type="checkbox" id="preloadToggle" onchange="onPreloadToggle()">
       </label>
-      <button class="tool-btn" onclick="manualRefresh()" title="手动刷新，同步最新信息">🔄</button>
-      <button class="tool-btn" onclick="event.stopPropagation(); toggleClearMenu()">清理缓存</button>
-      <div class="clear-menu" id="clearMenu" onclick="event.stopPropagation()">
-        <div class="clear-menu-head">清理缓存<span class="clear-close" onclick="toggleClearMenu(false)">✕</span></div>
-        <div class="clear-item" onclick="clearCache('last5')">保留最近 5 条</div>
-        <div class="clear-item" onclick="clearCache('all')">全部清理</div>
-      </div>
+      <button class="tool-btn" onclick="manualRefresh()" title="手动刷新，重新拉取当前会话">🔄</button>
     </div>
     <div class="sidebar-divider"></div>
     <div id="sessions"></div>   <!-- 对话列表由 JS 渲染 -->
@@ -254,6 +278,7 @@
     <div id="messages">
       <div class="load-more" id="loadMore" style="display:none" onclick="loadMoreHistory()">↑ 加载更早的对话</div>
       <div class="empty" id="empty">选择或新建一个对话开始</div>
+      <button id="newMsgBtn" class="new-msg-btn" onclick="jumpToLatest()">↓ <span id="newMsgCount">0</span> 条新消息</button>
     </div>
     <!-- 输入框上方的模型状态条（点击展开左右两栏：模型/思考强度）-->
     <div id="modelBar" class="model-bar" onclick="event.stopPropagation(); toggleModelMenu()">
@@ -274,9 +299,18 @@
       </div>
     </div>
     <div id="inputbar">
-      <button id="attachBtn" class="attach-btn" onclick="document.getElementById('fileInput').click()" title="上传文件/图片">📎</button>
-      <input type="file" id="fileInput" style="display:none" onchange="sendFile(this)">
-      <textarea id="input" rows="1" placeholder="发消息给 DSH…" onkeydown="onInputKey(event)"></textarea>
+      <div id="slashMenu" class="slash-menu"></div>
+      <button id="attachBtn" class="attach-btn" onclick="event.stopPropagation(); toggleAttachMenu()" title="添加附件">📎</button>
+      <div id="attachMenu" class="attach-menu" onclick="event.stopPropagation()">
+        <button class="attach-option" onclick="openAttachmentPicker('image')"><span>▧</span><span>选择图片</span></button>
+        <button class="attach-option" onclick="openAttachmentPicker('text')"><span>▤</span><span>选择文本文件</span></button>
+      </div>
+      <input type="file" id="imageInput" accept="image/png,image/jpeg,image/webp,image/gif" multiple style="display:none" onchange="sendFile(this)">
+      <input type="file" id="textFileInput" accept=".txt,.md,.markdown,.json,.csv,.yaml,.yml,.xml,text/plain,text/markdown,application/json,text/csv,application/xml,text/xml" multiple style="display:none" onchange="sendFile(this)">
+      <div class="composer">
+        <div id="attachmentTray" class="attachment-tray"></div>
+        <textarea id="input" rows="1" placeholder="发消息给 DSH…" onkeydown="onInputKey(event)"></textarea>
+      </div>
       <button id="send" onclick="sendMessage()">➤</button>
     </div>
   </div>
@@ -287,6 +321,7 @@
 // ============ 全局状态 ============
 let pw = localStorage.getItem('dsh_pw') || '';  // 访问密码（存 localStorage 免重复输入）
 let currentSessionId = null;                     // 当前打开的会话 ID
+let sessionOpenVersion = 0;                      // 丢弃过期的历史加载结果
 let webRunningSet = new Set();                   // 手机网页正在流式的会话（每个会话独立）
 let agentRunningSet = new Set();                 // agent 正在运行的会话（来自会话列表的 running 字段）
 let hasMoreHistory = false;                       // 当前会话是否还有更早的消息（"加载更多"）
@@ -296,23 +331,55 @@ const sessionCache = new Map();                   // sessionId -> {messages, has
 let currentMessages = [];                         // 当前会话已加载的消息（镜像 DOM）
 const unreadMap = new Map();                      // sessionId -> 未读条数
 const seenSeqMap = new Map();                     // sessionId -> 上次看到的 latestSeq
+const collapsedWorkspaces = new Set();            // workspaceId -> 侧栏是否折叠
 let preloadEnabled = false;                       // 预加载开关
 let preloadTimer = null;                          // 后台预载定时器
-let pendingUpload = null;                         // 待发送的附件内容块 { blocks, display }
+let pendingUploads = [];                          // 已选择、等待随文字一起发送的附件
+let nextAttachmentId = 1;
+const MAX_PENDING_ATTACHMENTS = 20;
+const CACHE_VERSION = '2';                         // v2 丢弃可能含技能注入气泡的旧消息缓存
+const slashCatalogCache = new Map();               // sessionId -> {commands, skills}
+const slashCatalogLoading = new Map();             // sessionId -> Promise
+let slashTrigger = null;                           // 当前输入光标处的候选触发信息
+let slashActiveIndex = 0;                          // 键盘高亮候选
+let slashMenuRevision = 0;                         // 阻止过期目录请求重新打开菜单
+
+const COMMAND_ZH = {
+  compact: '压缩较早的对话历史',
+  export: '下载当前会话日志',
+  feedback: '提交当前会话反馈',
+  goal: '查看或管理长期任务目标',
+  permission: '切换权限与审批策略',
+  plan: '进入或退出计划模式',
+};
+const SKILL_ZH = {
+  'cordis-plugin-development': '创建、修改或调试 Cordis 插件',
+  'delegate-goal': '规范委派任务并回传可验证结果',
+  'editing-cordis-compositions': '编辑或排查 Cordis 组合配置',
+  'grill-me': '通过连续追问打磨方案与决策',
+  tdd: '用测试驱动方式开发或修复问题',
+};
 
 // 持久化缓存 + 未读/已读状态（刷新不丢）
 function persistState() {
   try {
+    localStorage.setItem('dsh_cache_version', CACHE_VERSION);
     localStorage.setItem('dsh_cache', JSON.stringify(Array.from(sessionCache.entries())));
     localStorage.setItem('dsh_seen', JSON.stringify(Array.from(seenSeqMap.entries())));
     localStorage.setItem('dsh_unread', JSON.stringify(Array.from(unreadMap.entries())));
+    localStorage.setItem('dsh_collapsed_workspaces', JSON.stringify(Array.from(collapsedWorkspaces)));
   } catch (e) { /* localStorage 满或不可用则忽略 */ }
 }
 function loadPersistedState() {
   try {
+    if (localStorage.getItem('dsh_cache_version') !== CACHE_VERSION) {
+      localStorage.removeItem('dsh_cache');
+      localStorage.setItem('dsh_cache_version', CACHE_VERSION);
+    }
     for (const [id, c] of JSON.parse(localStorage.getItem('dsh_cache') || '[]')) sessionCache.set(id, c);
     for (const [id, s] of JSON.parse(localStorage.getItem('dsh_seen') || '[]')) seenSeqMap.set(id, s);
     for (const [id, u] of JSON.parse(localStorage.getItem('dsh_unread') || '[]')) unreadMap.set(id, u);
+    for (const id of JSON.parse(localStorage.getItem('dsh_collapsed_workspaces') || '[]')) collapsedWorkspaces.add(id);
   } catch (e) { /* 忽略 */ }
 }
 const PAGE_SIZE = 20;                             // 打开会话默认加载条数
@@ -366,7 +433,49 @@ function showLogin() {
 }
 
 // ============ 会话列表 ============
-// 拉取会话列表并渲染到侧栏
+function renderSessionRow(s, box) {
+  if (s.running) agentRunningSet.add(s.sessionId);
+  const div = document.createElement('div');
+  div.className = 'sess' + (s.running ? ' running' : '') + (s.sessionId === currentSessionId ? ' active' : '');
+  div.innerHTML = '<span class="dot"></span><span class="t"></span>';
+  div.querySelector('.t').textContent = s.title;
+  const unread = unreadMap.get(s.sessionId) || 0;
+  if (unread > 0) {
+    const badge = document.createElement('span'); badge.className = 'unread';
+    badge.textContent = unread > 99 ? '99+' : String(unread);
+    div.appendChild(badge);
+  }
+  div.onclick = () => openSession(s.sessionId);   // 点击切换会话
+  box.appendChild(div);
+}
+
+function renderWorkspaceGroup(workspace, box) {
+  const group = document.createElement('section');
+  group.className = 'workspace-group' + (collapsedWorkspaces.has(workspace.workspaceId) ? ' collapsed' : '');
+  group.dataset.workspaceId = workspace.workspaceId;
+  const head = document.createElement('button');
+  head.type = 'button';
+  head.className = 'workspace-head';
+  head.setAttribute('aria-expanded', String(!group.classList.contains('collapsed')));
+  head.innerHTML = '<span class="workspace-chevron">▾</span><span class="workspace-title"></span><span class="workspace-count"></span>';
+  head.querySelector('.workspace-title').textContent = workspace.title;
+  head.querySelector('.workspace-count').textContent = String(workspace.sessions.length);
+  const sessionBox = document.createElement('div');
+  sessionBox.className = 'workspace-sessions';
+  for (const session of workspace.sessions) renderSessionRow(session, sessionBox);
+  head.onclick = () => {
+    const collapsed = group.classList.toggle('collapsed');
+    head.setAttribute('aria-expanded', String(!collapsed));
+    if (collapsed) collapsedWorkspaces.add(workspace.workspaceId);
+    else collapsedWorkspaces.delete(workspace.workspaceId);
+    persistState();
+  };
+  group.append(head, sessionBox);
+  box.appendChild(group);
+}
+
+// 拉取会话列表：服务端已按「最近聊天」排序（组内按更新时间倒序、组间按组内最新倒序），
+// 直接按返回顺序渲染即可。
 async function loadSessions() {
   try {
     const r = await api('/web/api/sessions');
@@ -374,21 +483,8 @@ async function loadSessions() {
     const box = document.getElementById('sessions');
     box.innerHTML = '';
     agentRunningSet.clear();   // 依据会话列表更新 agent 运行中的集合
-    for (const s of data.items) {
-      if (s.running) agentRunningSet.add(s.sessionId);
-      const div = document.createElement('div');
-      div.className = 'sess' + (s.running ? ' running' : '') + (s.sessionId === currentSessionId ? ' active' : '');
-      div.innerHTML = '<span class="dot"></span><span class="t"></span>';
-      div.querySelector('.t').textContent = s.title;
-      const unread = unreadMap.get(s.sessionId) || 0;
-      if (unread > 0) {
-        const badge = document.createElement('span'); badge.className = 'unread';
-        badge.textContent = unread > 99 ? '99+' : String(unread);
-        div.appendChild(badge);
-      }
-      div.onclick = () => openSession(s.sessionId);   // 点击切换会话
-      box.appendChild(div);
-    }
+    const groups = Array.isArray(data.groups) ? data.groups : [];
+    for (const group of groups) renderWorkspaceGroup(group, box);
     refreshCancelBtn();   // 刷新"打断"按钮状态
   } catch (e) { /* 401 已在 api() 里处理 */ }
 }
@@ -433,37 +529,10 @@ async function preloadLoop() {
   } catch (e) { /* 忽略 */ }
 }
 
-// ============ 清理缓存 ============
-function toggleClearMenu(show) {
-  const menu = document.getElementById('clearMenu');
-  const willShow = show === undefined ? !menu.classList.contains('show') : show;
-  menu.classList.toggle('show', willShow);
-}
-// 点页面其它地方关闭清理菜单
-document.addEventListener('click', () => document.getElementById('clearMenu').classList.remove('show'));
-
-function clearCache(mode) {
-  if (mode === 'all') {
-    sessionCache.clear();
-  } else {
-    // 保留最近 5 条
-    for (const [id, c] of sessionCache) {
-      const kept = c.messages.slice(-5);
-      sessionCache.set(id, {
-        messages: kept,
-        hasMore: true,   // 截断后必有更早消息
-        oldestSeq: kept.length ? kept[0].seq : null,
-        latestSeq: kept.length ? kept[kept.length - 1].seq : null,
-      });
-    }
-  }
-  persistState();
-  toggleClearMenu(false);
-}
-
 // ============ 打开会话 ============
 // 点某个会话：有缓存则秒显，否则拉取历史
 async function openSession(sessionId) {
+  const openVersion = ++sessionOpenVersion;
   const wasUnread = unreadMap.get(sessionId) || 0;
   const seenBefore = seenSeqMap.get(sessionId) || 0;
   saveCurrentSession();   // 先把当前会话缓存起来
@@ -487,6 +556,8 @@ async function openSession(sessionId) {
     showLoading();
     const r = await api('/web/api/history?sessionId=' + encodeURIComponent(sessionId) + '&maxMessages=' + PAGE_SIZE);
     const data = await r.json();
+    // 用户已切换到别的会话时，旧请求的结果不能覆盖当前页面。
+    if (openVersion !== sessionOpenVersion || currentSessionId !== sessionId) return;
     hideLoading();
     currentMessages = data.messages.slice();
     renderCurrentMessages();
@@ -502,6 +573,7 @@ async function openSession(sessionId) {
   unreadMap.delete(sessionId);
   persistState();
   if (wasUnread > 0) scrollToFirstUnread(seenBefore);   // 跳到最早未读处
+  resetNewMsgBubble();   // 打开会话时清掉上一个会话的新消息气泡
   refreshCancelBtn();   // 切会话即刷新"打断"按钮（该会话运行才显示）
   toggleSidebar(false);
   loadSessions();   // 刷新侧栏高亮（含未读徽章清除）
@@ -545,11 +617,13 @@ function fadeInMessages() {
   setTimeout(() => { msgs.style.transition = ''; }, 200);
 }
 
-// 清空消息区（保留顶部"加载更多"按钮）
+// 清空消息区（保留顶部"加载更多"按钮与底部"新消息"按钮）
 function clearMessages() {
   const msgs = document.getElementById('messages');
   const loadMore = document.getElementById('loadMore');
-  for (const el of Array.from(msgs.children)) { if (el !== loadMore) el.remove(); }
+  const newMsgBtn = document.getElementById('newMsgBtn');
+  for (const el of Array.from(msgs.children)) { if (el !== loadMore && el !== newMsgBtn) el.remove(); }
+  if (newMsgBtn) msgs.appendChild(newMsgBtn);   // 保证新消息按钮始终在末尾，sticky bottom 才生效
 }
 // 加载动画
 function showLoading() {
@@ -594,25 +668,43 @@ async function newChat() {
 }
 
 // ============ 发送消息（核心：SSE 流式；支持附件 blocks）============
-async function sendMessage() {
-  if (isRunning(currentSessionId)) return;   // 仅该会话正在运行时才禁止，其它会话照常可发
-  const upload = pendingUpload;
-  const text = document.getElementById('input').value.trim();
-  if (!currentSessionId) return;
-  if (!text && !upload) return;   // 无文本也无附件则不发
-
-  let userDisplay = text;
-  let blocks = null;
-  if (upload) {
-    userDisplay = upload.display;
-    blocks = upload.blocks;
-    pendingUpload = null;   // 消费掉待发送附件
+function recordAssistantMessage(sessionId, text, seq = null) {
+  const message = { role: 'assistant', text, seq };
+  if (currentSessionId === sessionId) {
+    currentMessages.push(message);
+    return;
   }
+  const cached = sessionCache.get(sessionId);
+  if (!cached) return;
+  cached.messages.push(message);
+  if (seq !== null) cached.latestSeq = seq;
+  sessionCache.set(sessionId, cached);
+  persistState();
+}
+
+async function sendMessage() {
+  const sessionId = currentSessionId;
+  if (!sessionId || isRunning(sessionId)) return;   // 仅该会话正在运行时才禁止，其它会话照常可发
+  const startingLatestSeq = latestSeq;
+  const uploads = pendingUploads.slice();
+  const text = document.getElementById('input').value.trim();
+  if (!text && uploads.length === 0) return;   // 无文本也无附件则不发
+  closeSlashMenu();
+  closeAttachMenu();
+
+  const labels = uploads.map((upload) => upload.display);
+  const userDisplay = [text, ...labels].filter(Boolean).join('\n');
+  const blocks = uploads.length > 0
+    ? uploads.flatMap((upload) => upload.blocks).concat(text ? [{ type: 'text', text }] : [])
+    : null;
+  pendingUploads = [];
+  renderAttachmentTray();
 
   // 用户消息：从下往上浮入
   appendMessage('user', userDisplay, true);
   currentMessages.push({ role: 'user', text: userDisplay, seq: null });   // 进内存镜像
-  if (!upload) { document.getElementById('input').value = ''; autoGrow(); }
+  document.getElementById('input').value = '';
+  autoGrow();
 
   // 建一个空的 AI 气泡，先显示"…"动画
   const asstEl = appendMessage('assistant', '');
@@ -621,13 +713,14 @@ async function sendMessage() {
   bubble.textContent = '…';
   const cursor = document.createElement('span'); cursor.className = 'cursor';
 
-  webRunningSet.add(currentSessionId);   // 记录该会话正在流式
+  webRunningSet.add(sessionId);   // 记录发起发送的会话正在流式
   refreshCancelBtn();
   startPendingPoll();   // 开始轮询提问/审批
 
   let full = '';               // 缓冲的完整文本
   let switchedToStream = false;
   let revealTimer = null;
+  let terminalReceived = false;
   const startTimer = () => {
     revealTimer = setTimeout(() => {
       // 超过阈值(1.5s)：切到流式，显示已缓冲内容 + 光标
@@ -648,7 +741,7 @@ async function sendMessage() {
     const r = await fetch('/web/api/send', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'authorization': auth() },
-      body: JSON.stringify({ sessionId: currentSessionId, content: text, blocks }),
+      body: JSON.stringify({ sessionId, content: text, blocks }),
     });
     // 用 ReadableStream 逐块读取 SSE 帧
     const reader = r.body.getReader();
@@ -670,42 +763,57 @@ async function sendMessage() {
           if (revealTimer === null && full) startTimer();       // 首次有内容时启动阈值计时
           if (switchedToStream) setBubble(asstEl, full, cursor); // 已切流式则实时更新
         } else if (m.type === 'done') {
+          terminalReceived = true;
           const finalText = m.text || full || '(无文本)';
-          currentMessages.push({ role: 'assistant', text: finalText, seq: null });   // 进内存镜像
+          recordAssistantMessage(sessionId, finalText);   // 写回发起发送的会话
           if (switchedToStream) { clearTimeout(revealTimer); setBubble(asstEl, finalText, null); }
           else finishReveal(finalText);
+        } else if (m.type === 'cancelled') {
+          terminalReceived = true;
+          const partial = m.text || full;
+          if (partial) {
+            recordAssistantMessage(sessionId, partial);
+            if (switchedToStream) { clearTimeout(revealTimer); setBubble(asstEl, partial, null); }
+            else finishReveal(partial);
+          } else {
+            asstEl.remove();   // 无部分回复，移除空白 AI 气泡
+          }
         } else if (m.type === 'error') {
+          terminalReceived = true;
           clearTimeout(revealTimer); bubble.classList.remove('pending'); setBubble(asstEl, '出错: ' + (m.error || '未知'), null);
         } else if (m.type === 'timeout') {
+          terminalReceived = true;
           clearTimeout(revealTimer); bubble.classList.remove('pending'); setBubble(asstEl, (m.text || full || '') + '\n(超时)', null);
         }
       }
     }
-    // 流结束但没收到 done 的兜底
-    if (revealTimer !== null && !switchedToStream) {
-      currentMessages.push({ role: 'assistant', text: full || '(无文本)', seq: null });
+    // 流结束但没收到终止帧的兜底
+    if (!terminalReceived) {
+      recordAssistantMessage(sessionId, full || '(无文本)');
       finishReveal(full || '(无文本)');
     }
   } catch (e) {
     clearTimeout(revealTimer); bubble.classList.remove('pending');
     // 连接中断：尝试从历史恢复完整回复（agent 可能在服务端已生成完）
     setBubble(asstEl, '连接中断，正在恢复…', null);
-    await recoverReply(asstEl);
+    await recoverReply(asstEl, sessionId, startingLatestSeq);
   } finally {
-    stopPendingPoll();   // 停止轮询
-    // 校准 latestSeq（发消息产生了无 seq 的消息，拉最新更新，避免 syncHistory 重复追加）
+    if (currentSessionId === sessionId) stopPendingPoll();   // 不停止切换后新会话的轮询
+    // 校准发起会话的 latestSeq；切走后不覆盖当前会话的分页游标。
     try {
-      const rr = await fetch('/web/api/history?sessionId=' + encodeURIComponent(currentSessionId) + '&maxMessages=5', { headers: { 'authorization': auth() } });
+      const rr = await fetch('/web/api/history?sessionId=' + encodeURIComponent(sessionId) + '&maxMessages=5', { headers: { 'authorization': auth() } });
       const dd = await rr.json();
-      if (dd.messages && dd.messages.length) latestSeq = dd.messages[dd.messages.length - 1].seq;
+      if (currentSessionId === sessionId && dd.messages && dd.messages.length) latestSeq = dd.messages[dd.messages.length - 1].seq;
     } catch (e2) {}
-    saveCurrentSession();
-    webRunningSet.delete(currentSessionId);   // 该会话流式结束
+    if (currentSessionId === sessionId) saveCurrentSession();
+    webRunningSet.delete(sessionId);   // 清理实际发起发送的会话
     refreshCancelBtn();
-    loadTurnCost();   // 结束后显示"本次对话消费"
-    refreshRunningStatus();   // 结束后刷新运行状态（隐藏打断/进行中提示）
+    if (currentSessionId === sessionId) {
+      loadTurnCost();   // 结束后显示"本次对话消费"
+      refreshRunningStatus();   // 结束后刷新运行状态（隐藏打断/进行中提示）
+      document.getElementById('messages').scrollTop = 1e9;
+    }
     loadSessions();   // 刷新标题（首条消息会生成标题）
-    document.getElementById('messages').scrollTop = 1e9;
   }
 }
 // 更新气泡文本（带/不带流式光标）
@@ -716,28 +824,74 @@ function setBubble(el, text, cursor) {
 }
 
 // ============ 上传文件/图片 ============
-async function sendFile(input) {
-  const file = input.files && input.files[0];
-  input.value = '';
-  if (!file || !currentSessionId) return;
-  try {
-    let blocks, display;
-    if (/^image\/(png|jpeg|webp|gif)$/.test(file.type)) {
-      // 图片：读 base64，走 DSH 的 image 内容块
-      const dataUrl = await readFileAsDataURL(file);
-      display = '[图片] ' + file.name;
-      blocks = [{ type: 'image', mediaType: file.type, data: dataUrl.split(',')[1] }];
-    } else {
-      // 文本文件（md/txt/json…）：读出内容作为文本块
-      const text = await readFileAsText(file);
-      display = '[附件] ' + file.name;
-      blocks = [{ type: 'text', text: `【用户上传文件：${file.name}】\n${text}` }];
-    }
-    pendingUpload = { blocks, display };
-    sendMessage();   // 走正常发送流程（流式 + 动画 + 打断）
-  } catch (e) {
-    toast('读取文件失败：' + e.message);
+function toggleAttachMenu(force) {
+  const menu = document.getElementById('attachMenu');
+  const show = force === undefined ? !menu.classList.contains('show') : force;
+  menu.classList.toggle('show', show);
+  if (show) closeSlashMenu();
+}
+function closeAttachMenu() { document.getElementById('attachMenu').classList.remove('show'); }
+function openAttachmentPicker(kind) {
+  closeAttachMenu();
+  document.getElementById(kind === 'image' ? 'imageInput' : 'textFileInput').click();
+}
+function renderAttachmentTray() {
+  const tray = document.getElementById('attachmentTray');
+  tray.innerHTML = '';
+  tray.classList.toggle('show', pendingUploads.length > 0);
+  for (const upload of pendingUploads) {
+    const item = document.createElement('div');
+    item.className = 'attachment-item';
+    const kind = document.createElement('span');
+    kind.className = 'attachment-kind';
+    kind.textContent = upload.kind === 'image' ? '图片' : '文件';
+    const name = document.createElement('span');
+    name.className = 'attachment-name';
+    name.textContent = upload.name;
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'attachment-remove';
+    remove.title = '移除附件';
+    remove.textContent = '×';
+    remove.onclick = () => removeAttachment(upload.id);
+    item.append(kind, name, remove);
+    tray.appendChild(item);
   }
+}
+function removeAttachment(id) {
+  pendingUploads = pendingUploads.filter((upload) => upload.id !== id);
+  renderAttachmentTray();
+}
+async function prepareUpload(file) {
+  if (/^image\/(png|jpeg|webp|gif)$/.test(file.type)) {
+    const dataUrl = await readFileAsDataURL(file);
+    return {
+      id: nextAttachmentId++, kind: 'image', name: file.name,
+      display: '[图片] ' + file.name,
+      blocks: [{ type: 'image', mediaType: file.type, data: dataUrl.split(',')[1] }],
+    };
+  }
+  const text = await readFileAsText(file);
+  return {
+    id: nextAttachmentId++, kind: 'text', name: file.name,
+    display: '[附件] ' + file.name,
+    blocks: [{ type: 'text', text: `【用户上传文件：${file.name}】\n${text}` }],
+  };
+}
+async function sendFile(input) {
+  const files = Array.from(input.files || []);
+  input.value = '';
+  if (files.length === 0) return;
+  if (!currentSessionId) { toast('请先选择会话'); return; }
+  const remaining = MAX_PENDING_ATTACHMENTS - pendingUploads.length;
+  if (remaining <= 0) { toast('最多添加 20 个附件'); return; }
+  if (files.length > remaining) toast('最多添加 20 个附件，已忽略多余文件');
+  const results = await Promise.allSettled(files.slice(0, remaining).map(prepareUpload));
+  const failed = results.filter((result) => result.status === 'rejected');
+  pendingUploads.push(...results.filter((result) => result.status === 'fulfilled').map((result) => result.value));
+  renderAttachmentTray();
+  if (failed.length > 0) toast('有 ' + failed.length + ' 个附件读取失败');
+  document.getElementById('input').focus();
 }
 function readFileAsText(file) {
   return new Promise((resolve, reject) => {
@@ -758,17 +912,46 @@ function readFileAsDataURL(file) {
 
 // ============ 打断当前会话 ============
 async function cancelTurn() {
-  if (!currentSessionId) return;
-  try { await api('/web/api/cancel', { method: 'POST', body: { sessionId: currentSessionId } }); }
-  catch (e) {}
+  const sessionId = currentSessionId;
+  const btn = document.getElementById('cancelBtn');
+  if (!sessionId || btn.disabled) return;
+  btn.disabled = true;
+  btn.textContent = '打断中…';
+  try {
+    const r = await api('/web/api/cancel', { method: 'POST', body: { sessionId } });
+    const result = await r.json().catch(() => ({}));
+    if (!r.ok || result.accepted !== true) throw new Error(result.error || 'DSH 未接受打断请求');
+    if (currentSessionId === sessionId) appendSystemMessage('⛔ 已打断');
+    toast('已请求打断');
+  } catch (e) {
+    toast('打断失败：' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '打断';
+    if (currentSessionId === sessionId) refreshRunningStatus();
+    else refreshCancelBtn();
+  }
 }
 
 // ============ 提问/审批交互（轮询 + 可选按钮）============
 let pendingRpcId = null;       // 当前已渲染的待处理请求 rpcId（避免重复渲染）
 let pendingTimer = null;       // 轮询定时器
 let lastMsgCount = 0;          // 当前显示的消息条数（用于检测新增消息）
+let newMsgCount = 0;           // 当前会话在用户上翻后累积的新消息条数
 
 function scrollBottom() { document.getElementById('messages').scrollTop = 1e9; }
+function isAtBottom() {
+  const msgs = document.getElementById('messages');
+  return msgs.scrollTop + msgs.clientHeight >= msgs.scrollHeight - 24;   // 24px 阈值
+}
+function updateNewMsgBubble() {
+  const btn = document.getElementById('newMsgBtn');
+  const count = document.getElementById('newMsgCount');
+  if (btn) btn.classList.toggle('show', newMsgCount > 0);
+  if (count) count.textContent = String(newMsgCount);
+}
+function resetNewMsgBubble() { newMsgCount = 0; updateNewMsgBubble(); }
+function jumpToLatest() { resetNewMsgBubble(); scrollBottom(); }
 
 // 轮询当前会话的待处理提问/审批
 async function pollPending() {
@@ -791,11 +974,13 @@ async function syncHistory() {
     // 只追加比当前 latestSeq 更新的消息，不整页重渲染（保留分页 + 加载更多按钮）
     const newer = (d.messages || []).filter((m) => latestSeq === null || m.seq > latestSeq);
     if (newer.length) {
+      const wasAtBottom = isAtBottom();   // 追加前记录用户是否在底部
       for (const m of newer) { appendMessage(m.role, m.text); currentMessages.push(m); latestSeq = m.seq; }
       lastMsgCount += newer.length;
       seenSeqMap.set(currentSessionId, latestSeq);   // 当前会话已看到最新
       saveCurrentSession();
-      scrollBottom();
+      if (wasAtBottom) { scrollBottom(); resetNewMsgBubble(); }
+      else { newMsgCount += newer.length; updateNewMsgBubble(); }
     }
   } catch (e) { /* 忽略 */ }
 }
@@ -1103,12 +1288,11 @@ function cycleTheme() {
 }
 
 // 断线恢复：SSE 中断后轮询历史，把 agent 已生成的回复捞回来
-async function recoverReply(asstEl) {
-  const seenSeq = latestSeq;   // 发送前的最新 seq（新回复会大于它）
+async function recoverReply(asstEl, sessionId, seenSeq) {
   for (let i = 0; i < 6; i++) {   // 最多等约 12 秒
     await new Promise((r) => setTimeout(r, 2000));
     try {
-      const r = await api('/web/api/history?sessionId=' + encodeURIComponent(currentSessionId) + '&maxMessages=10');
+      const r = await api('/web/api/history?sessionId=' + encodeURIComponent(sessionId) + '&maxMessages=10');
       const d = await r.json();
       const newer = (d.messages || []).filter((m) => m.seq > (seenSeq ?? 0) && m.role === 'assistant' && m.text);
       if (newer.length) {
@@ -1116,11 +1300,13 @@ async function recoverReply(asstEl) {
         const bubble = asstEl.querySelector('.bubble');
         bubble.textContent = last.text;
         asstEl.classList.add('animate-in');
-        currentMessages.push(last);
-        latestSeq = last.seq;
-        lastMsgCount += 1;
-        saveCurrentSession();
-        scrollBottom();
+        recordAssistantMessage(sessionId, last.text, last.seq);
+        if (currentSessionId === sessionId) {
+          latestSeq = last.seq;
+          lastMsgCount += 1;
+          saveCurrentSession();
+          scrollBottom();
+        }
         return;
       }
     } catch (e2) { /* 继续重试 */ }
@@ -1128,18 +1314,41 @@ async function recoverReply(asstEl) {
   setBubble(asstEl, '连接中断且未能自动恢复，请刷新后查看', null);
 }
 
-// 侧边栏手动刷新：同步最新信息（会话/余额/模型/消费/审批/消息）
+// 权威重拉当前会话：从服务器重新取最近 PAGE_SIZE 条并整体重渲染，丢弃当前内存/缓存视图
+async function reloadCurrentSession() {
+  const sessionId = currentSessionId;
+  if (!sessionId) return;
+  const openVersion = ++sessionOpenVersion;
+  const r = await api('/web/api/history?sessionId=' + encodeURIComponent(sessionId) + '&maxMessages=' + PAGE_SIZE);
+  const data = await r.json();
+  if (openVersion !== sessionOpenVersion || currentSessionId !== sessionId) return;
+  currentMessages = data.messages.slice();
+  renderCurrentMessages();
+  hasMoreHistory = !!data.hasMore;
+  oldestSeq = data.oldestSeq;
+  latestSeq = data.messages.length ? data.messages[data.messages.length - 1].seq : null;
+  lastMsgCount = data.messages.length;
+  updateLoadMoreBtn();
+  if (latestSeq !== null) seenSeqMap.set(sessionId, latestSeq);
+  unreadMap.delete(sessionId);
+  persistState();
+  saveCurrentSession();
+  document.getElementById('messages').scrollTop = 1e9;
+}
+
+// 侧边栏手动刷新：权威重拉当前会话 + 同步会话列表/余额/模型/消费/审批
 async function manualRefresh() {
   toast('正在刷新…');
   try {
     await Promise.all([
+      reloadCurrentSession(),   // 重新获取当前会话完整内容并重渲染
       loadSessions(),   // 会话列表 + 运行状态
       loadBalance(),    // 余额
       loadModel(),      // 模型
       loadTurnCost(),   // 本次对话消费
       pollPending(),    // 重新检查待审批/提问（可找回丢的审批）
-      syncHistory(),    // 同步最新消息
     ]);
+    refreshRunningStatus();   // 同步运行状态（打断按钮/进行中提示/侧栏绿点）
     toast('刷新完成');
   } catch (e) {
     toast('刷新失败');
@@ -1147,6 +1356,24 @@ async function manualRefresh() {
 }
 
 // ============ 渲染消息气泡 ============
+// 系统提示（居中、不进入会话缓存，纯 UI 通知）
+function appendSystemMessage(text) {
+  const msgs = document.getElementById('messages');
+  const empty = document.getElementById('empty');
+  if (empty) empty.style.display = 'none';
+  const wrap = document.createElement('div');
+  wrap.className = 'msg system';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.textContent = text || '';
+  wrap.appendChild(bubble);
+  const newMsgBtn = document.getElementById('newMsgBtn');
+  if (newMsgBtn) msgs.insertBefore(wrap, newMsgBtn);
+  else msgs.appendChild(wrap);
+  msgs.scrollTop = 1e9;
+  return wrap;
+}
+
 function appendMessage(role, text, animate) {
   const msgs = document.getElementById('messages');
   const empty = document.getElementById('empty');
@@ -1164,15 +1391,165 @@ function appendMessage(role, text, animate) {
   copyBtn.innerHTML = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="5" y="5" width="8" height="8" rx="1"/><path d="M3 8v5a1 1 0 0 0 1 1h5"/></svg>';
   copyBtn.onclick = () => copyMsg(bubble.textContent || '');
   wrap.appendChild(copyBtn);
-  msgs.appendChild(wrap);
+  const newMsgBtn = document.getElementById('newMsgBtn');
+  if (newMsgBtn) msgs.insertBefore(wrap, newMsgBtn);   // 消息插到"新消息"按钮之前
+  else msgs.appendChild(wrap);
   msgs.scrollTop = 1e9;   // 滚到底部
   return wrap;
 }
 
 // ============ 输入框交互 ============
-// 回车发送，Shift+回车换行
+function slashDescription(kind, item) {
+  const localized = kind === 'command' ? COMMAND_ZH[item.name] : SKILL_ZH[item.name];
+  return localized || item.description || (kind === 'command' ? 'DSH 命令' : '调用该技能');
+}
+
+// 识别光标所在 token：输入开头 / 显示全部，其它空白边界的 / 或 @ 只显示技能。
+function readSlashTrigger() {
+  const input = document.getElementById('input');
+  if (input.selectionStart !== input.selectionEnd) return null;
+  const caret = input.selectionStart;
+  const match = input.value.slice(0, caret).match(/(?:^|\s)([/@])([a-z0-9-]*)$/i);
+  if (!match) return null;
+  const symbol = match[1];
+  const query = match[2] || '';
+  const start = caret - symbol.length - query.length;
+  return { symbol, query, start, end: caret, mode: symbol === '/' && start === 0 ? 'all' : 'skills' };
+}
+
+async function loadSlashCatalog(sessionId, force) {
+  if (!sessionId) return { commands: [], skills: [] };
+  if (!force && slashCatalogCache.has(sessionId)) return slashCatalogCache.get(sessionId);
+  if (!force && slashCatalogLoading.has(sessionId)) return slashCatalogLoading.get(sessionId);
+  const promise = (async () => {
+    try {
+      const r = await api('/web/api/slash-options?sessionId=' + encodeURIComponent(sessionId));
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const data = await r.json();
+      const catalog = { commands: data.commands || [], skills: data.skills || [] };
+      slashCatalogCache.set(sessionId, catalog);
+      return catalog;
+    } catch (e) {
+      const catalog = { commands: [], skills: [], failed: true };
+      slashCatalogCache.set(sessionId, catalog);
+      return catalog;
+    } finally {
+      slashCatalogLoading.delete(sessionId);
+    }
+  })();
+  slashCatalogLoading.set(sessionId, promise);
+  return promise;
+}
+
+function closeSlashMenu() {
+  slashMenuRevision++;
+  slashTrigger = null;
+  slashActiveIndex = 0;
+  const menu = document.getElementById('slashMenu');
+  menu.classList.remove('show');
+  menu.innerHTML = '';
+}
+
+function slashItems(catalog, trigger) {
+  const commands = trigger.mode === 'all'
+    ? (catalog.commands || []).map((item) => ({ kind: 'command', item }))
+    : [];
+  const skills = (catalog.skills || []).map((item) => ({ kind: 'skill', item }));
+  const query = trigger.query.toLowerCase();
+  return commands.concat(skills)
+    .filter(({ kind, item }) => {
+      const text = [item.name, item.description, slashDescription(kind, item)].join(' ').toLowerCase();
+      return !query || text.includes(query);
+    })
+    .sort((a, b) => {
+      const kindOrder = (a.kind === 'command' ? 0 : 1) - (b.kind === 'command' ? 0 : 1);
+      return kindOrder || a.item.name.localeCompare(b.item.name);
+    });
+}
+
+function renderSlashMenu(catalog, trigger) {
+  const menu = document.getElementById('slashMenu');
+  menu.innerHTML = '';
+  menu.classList.add('show');
+  const items = slashItems(catalog, trigger);
+  if (!items.length) {
+    const empty = document.createElement('div');
+    empty.className = 'slash-empty';
+    empty.textContent = catalog.failed ? '候选目录加载失败，仍可手动输入' : '没有匹配的命令或技能';
+    menu.appendChild(empty);
+    return;
+  }
+  if (slashActiveIndex >= items.length) slashActiveIndex = 0;
+  for (const [index, entry] of items.entries()) {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'slash-item' + (index === slashActiveIndex ? ' active' : '');
+    const name = document.createElement('span'); name.className = 'slash-name'; name.textContent = '/' + entry.item.name;
+    const kind = document.createElement('span'); kind.className = 'slash-kind'; kind.textContent = entry.kind === 'command' ? '命令' : '技能';
+    const desc = document.createElement('span'); desc.className = 'slash-desc'; desc.textContent = slashDescription(entry.kind, entry.item);
+    row.appendChild(name); row.appendChild(kind); row.appendChild(desc);
+    row.onpointerdown = (event) => event.preventDefault();
+    row.onclick = () => selectSlashItem(entry);
+    menu.appendChild(row);
+  }
+}
+
+function selectSlashItem(entry) {
+  if (!slashTrigger) return;
+  const input = document.getElementById('input');
+  const addSpace = entry.kind === 'skill' || entry.item.input;
+  const replacement = '/' + entry.item.name + (addSpace ? ' ' : '');
+  input.value = input.value.slice(0, slashTrigger.start) + replacement + input.value.slice(slashTrigger.end);
+  const caret = slashTrigger.start + replacement.length;
+  closeSlashMenu();
+  input.focus();
+  input.setSelectionRange(caret, caret);
+  autoGrow();
+}
+
+async function updateSlashMenu() {
+  const trigger = readSlashTrigger();
+  if (!trigger || !currentSessionId) { closeSlashMenu(); return; }
+  const triggerKey = [trigger.symbol, trigger.query, trigger.start, trigger.mode].join(':');
+  const previousKey = slashTrigger && [slashTrigger.symbol, slashTrigger.query, slashTrigger.start, slashTrigger.mode].join(':');
+  if (triggerKey !== previousKey) slashActiveIndex = 0;
+  slashTrigger = trigger;
+  const revision = ++slashMenuRevision;
+  const cached = slashCatalogCache.get(currentSessionId);
+  if (cached) { renderSlashMenu(cached, trigger); return; }
+  const menu = document.getElementById('slashMenu');
+  menu.innerHTML = '<div class="slash-empty">正在加载候选…</div>';
+  menu.classList.add('show');
+  const sessionId = currentSessionId;
+  const catalog = await loadSlashCatalog(sessionId);
+  if (revision !== slashMenuRevision) return;
+  if (sessionId === currentSessionId) {
+    const latest = readSlashTrigger();
+    if (latest) { slashTrigger = latest; renderSlashMenu(catalog, latest); }
+  }
+}
+
 function onInputKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  if (e.isComposing) return;
+  const menu = document.getElementById('slashMenu');
+  const catalog = currentSessionId && slashCatalogCache.get(currentSessionId);
+  const items = slashTrigger && catalog ? slashItems(catalog, slashTrigger) : [];
+  if (menu.classList.contains('show')) {
+    if (e.key === 'Escape') { e.preventDefault(); closeSlashMenu(); return; }
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && items.length) {
+      e.preventDefault();
+      const offset = e.key === 'ArrowDown' ? 1 : -1;
+      slashActiveIndex = (slashActiveIndex + offset + items.length) % items.length;
+      renderSlashMenu(catalog, slashTrigger);
+      menu.querySelector('.slash-item.active')?.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    if (e.key === 'Enter' && items.length) {
+      e.preventDefault();
+      selectSlashItem(items[slashActiveIndex]);
+      return;
+    }
+  }
 }
 // 输入时自动增高（最多 120px）
 function autoGrow() {
@@ -1190,7 +1567,14 @@ function toggleSidebar(force) {
   const logo = document.getElementById('headerLogo');
   if (logo) logo.style.display = open ? 'none' : 'inline-block';
 }
-document.getElementById('input').addEventListener('input', autoGrow);
+document.getElementById('input').addEventListener('input', () => { autoGrow(); updateSlashMenu(); });
+document.getElementById('messages').addEventListener('scroll', () => {
+  if (isAtBottom() && newMsgCount > 0) resetNewMsgBubble();
+});
+document.addEventListener('click', (event) => {
+  if (!event.target.closest('#inputbar')) closeSlashMenu();
+  if (!event.target.closest('#attachBtn') && !event.target.closest('#attachMenu')) closeAttachMenu();
+});
 
 // ============ 启动 ============
 if (pw) {

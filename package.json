@@ -9,6 +9,7 @@
   },
   "scripts": {
     "smoke:dsh": "node scripts/smoke-dsh.js",
+    "test:web": "node --test scripts/test-web.js",
     "start": "node src/index.js"
   }
 }

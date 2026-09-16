@@ -40,6 +40,17 @@ function truncateBytes(str, maxBytes) {
   return `${buf.subarray(0, end).toString('utf8')}\n\n（已截断）`;
 }
 
+/** DSH command.execute accepts encoded image attachments, not ordinary content blocks. */
+function commandImages(blocks) {
+  if (!Array.isArray(blocks)) return [];
+  return blocks
+    .filter((b) => b?.type === 'image' && typeof b.mediaType === 'string' && typeof b.data === 'string')
+    .map((b) => ({ mediaType: b.mediaType, data: b.data }));
+}
+
+/** DSH's skill layer recognizes whitespace-bounded /name gestures in ordinary prompts. */
+const SKILL_GESTURE = /(^|\s)\/([a-z0-9]+(?:-[a-z0-9]+)*)(?=\s|$)/g;
+
 /**
  * 桥接核心：一端驱动 DSH（会话映射 + prompt + 流式），一端把结果推回企业微信。
  */
@@ -176,7 +187,10 @@ export class Bridge {
           }
         } catch (e) { /* 统计失败不影响主流程 */ }
         if (ev.type === 'turn/end' && h) {
-          this._settle(sid, { kind: 'done', text: h.lastMessageText || h.parts.join('') });
+          this._settle(sid, {
+            kind: h.cancelRequested ? 'cancelled' : 'done',
+            text: h.lastMessageText || h.parts.join(''),
+          });
         }
         break;
       }
@@ -567,8 +581,55 @@ export class Bridge {
     return false;
   }
 
+  /** Execute a slash command and normalize its direct result to the web SSE shape. */
+  async _executeSlashCommand(sessionId, line, blocks) {
+    const execution = await this.dsh.commandsExecute({
+      sessionId,
+      line,
+      images: commandImages(blocks),
+    });
+    if (!execution) {
+      // @name is a web-only picker alias; the DSH runtime recognizes /name skill gestures.
+      let skills = [];
+      try { skills = (await this.dsh.skillList({ sessionId })).skills ?? []; } catch { /* no skill registry */ }
+      const names = new Set(skills.filter((s) => s && typeof s.name === 'string').map((s) => s.name));
+      SKILL_GESTURE.lastIndex = 0;
+      const hasSkill = Array.from(line.matchAll(SKILL_GESTURE)).some((m) => names.has(m[2]));
+      if (hasSkill) return null; // Let the normal prompt path inject <skill_content>.
+      return { kind: 'error', error: { message: `未知或格式错误的命令：${line}` } };
+    }
+    const result = execution.result ?? {};
+    if (result.kind === 'error') return { kind: 'error', error: { message: result.text || '命令执行失败' } };
+    return { kind: 'done', text: result.text ?? '' };
+  }
+
+  /** 取消当前回合，并立即结算网页正在等待的 SSE，避免依赖延迟到达的 turn/end。 */
+  async cancelSession(sessionId) {
+    const pending = this.pending.get(sessionId);
+    if (pending) pending.cancelRequested = true;
+    try {
+      const receipt = await this.dsh.sessionCancel({ sessionId });
+      if (receipt?.accepted === true) {
+        const h = this.pending.get(sessionId);
+        if (h) this._settle(sessionId, { kind: 'cancelled', text: h.lastMessageText || h.parts.join('') });
+      } else if (this.pending.get(sessionId) === pending) {
+        pending.cancelRequested = false;
+      }
+      return receipt;
+    } catch (error) {
+      if (pending && this.pending.get(sessionId) === pending) pending.cancelRequested = false;
+      throw error;
+    }
+  }
+
   /** 发送消息并流式回调每个 text-delta；返回 promise（resolve 于 turn/end）。blocks 为内容块（支持上传文件/图片）。 */
   async sendMessageStream(sessionId, content, onDelta, blocks) {
+    const line = typeof content === 'string' ? content.trim() : '';
+    if (line.startsWith('/')) {
+      const commandResult = await this._executeSlashCommand(sessionId, line, blocks);
+      if (commandResult) return commandResult;
+    }
+
     const waiter = this.beginWait(sessionId, { onDelta });
     try {
       await this.dsh.sessionPrompt({
