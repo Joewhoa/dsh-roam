@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check
+        run: |
+          node --check src/index.js
+          node --check src/server.js
+          node --check src/bridge.js
+          node --check src/dsh/client.js
+          node --check src/config.js
+      - name: Run web tests
+        run: npm run test:web

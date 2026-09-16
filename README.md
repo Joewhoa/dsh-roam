@@ -2,6 +2,8 @@
 
 把本机 **DeepSeek Harness (DSH)** 装进口袋：一个自托管的响应式网页，让你在手机上继续操作电脑上正在运行的 DSH agent——看会话、流式聊天、回复提问/审批、切换模型、查余额。
 
+[![CI](https://github.com/Joewhoa/dsh-roam/actions/workflows/ci.yml/badge.svg)](https://github.com/Joewhoa/dsh-roam/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 两种接入方式，任选其一（同一套代码，只差"对外暴露"这一步）：
 
 - **[🌐 Tailscale 版](#tailscale-免域名-推荐)** —— 免域名、私有加密隧道、零公网暴露
