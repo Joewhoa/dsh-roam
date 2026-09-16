@@ -5,7 +5,7 @@
   "type": "module",
   "description": "DSH 手机远程控制台：把本机 DeepSeek Harness 装进口袋，随处操控（支持 Tailscale 免域名 / Cloudflare 公网隧道两种接入）",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "smoke:dsh": "node scripts/smoke-dsh.js",
