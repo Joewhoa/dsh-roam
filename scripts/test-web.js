@@ -307,7 +307,6 @@ test('Bridge cancellation settles an active stream without waiting for turn/end'
         return { accepted: true };
       },
     },
-    store: {},
     config: { dsh: {} },
     turnTimeoutMs: 5000,
   });

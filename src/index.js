@@ -1,6 +1,5 @@
 import { config } from './config.js';
 import { DshClient } from './dsh/client.js';
-import { JsonStore } from './store.js';
 import { Bridge } from './bridge.js';
 import { createBridgeServer } from './server.js';
 
@@ -28,9 +27,7 @@ async function main() {
   if (!dshReady) process.exit(1);
   log.info(`[startup] DSH 可达: ${config.dsh.baseUrl}`);
 
-  const store = new JsonStore(config.store.path);
-  // 不含企业微信桥接（Bridge 内部对 wecom 使用 no-op）。
-  const bridge = new Bridge({ dsh, store, config, log });
+  const bridge = new Bridge({ dsh, config, log });
   await bridge.start();
 
   const server = createBridgeServer({ bridge, config, log });

@@ -1,5 +1,5 @@
 <#
-  One-shot setup for a Cloudflare named tunnel (for the WeCom callback).
+  One-shot setup for a Cloudflare named tunnel.
   Prerequisite: already authorized via `cloudflared tunnel login` (so ~/.cloudflared/cert.pem exists).
 
   Usage:
@@ -9,7 +9,7 @@
     1. create (or reuse) the named tunnel
     2. route DNS (CNAME -> cfargotunnel)
     3. write ~/.cloudflared/config-dsh.yml (ingress -> local bridge port)
-  and print the run command plus the WeCom callback URL.
+  and print the run command.
 #>
 param(
   [Parameter(Mandatory = $true)][string]$Domain,
@@ -67,6 +67,3 @@ Write-Host ""
 Write-Host "=== DONE ===" -ForegroundColor Green
 Write-Host "Start the tunnel:"
 Write-Host "  & '$Cloudflared' tunnel --config '$configPath' run $TunnelName"
-Write-Host ""
-Write-Host "WeCom callback URL:"
-Write-Host "  https://$Domain/wecom/callback"

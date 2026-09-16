@@ -38,7 +38,6 @@ export const config = {
     cwd: process.env.DSH_CWD || undefined,
     agentPreset: process.env.DSH_AGENT_PRESET || undefined,
   },
-  // Tailscale 版：不含企业微信桥接。
   server: {
     port: Number(process.env.BRIDGE_PORT ?? 8787),
   },
@@ -48,7 +47,4 @@ export const config = {
   },
   // 用于网页端余额查询的 DeepSeek API 密钥（来自凭证文件或环境变量）。
   deepseekApiKey: loadDeepseekApiKey(),
-  store: {
-    path: process.env.BRIDGE_STORE ?? resolve(process.cwd(), 'data', 'mappings.json'),
-  },
 };

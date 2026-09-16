@@ -153,21 +153,4 @@ export class DshClient {
     if (!res.ok) throw new Error(`transport failure for respond: HTTP ${res.status}`);
     return res.json(); // { accepted:true } | { accepted:false, reason }
   }
-
-  /** 取消一个待处理的提问（发送 ok:false + code:cancelled）。 */
-  async respondCancel(rpcId, { signal } = {}) {
-    const body = {
-      type: 'client-response',
-      rpcId,
-      result: { ok: false, error: { code: 'cancelled', message: 'cancelled', details: {} } },
-    };
-    const res = await fetch(`${this.baseUrl}/api/respond`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-      ...(signal ? { signal } : {}),
-    });
-    if (!res.ok) throw new Error(`transport failure for respond: HTTP ${res.status}`);
-    return res.json();
-  }
 }

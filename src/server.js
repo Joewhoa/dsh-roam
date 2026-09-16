@@ -34,7 +34,7 @@ function isInjectedContext(ev, text) {
   return typeof text === 'string' && (text.startsWith('Current runtime context') || text.startsWith('<system-reminder>'));
 }
 
-/** 桥接 HTTP 服务：/health + 手机网页 UI 及其 API（Tailscale 版，无企业微信）。 */
+/** 桥接 HTTP 服务：/health + 手机网页 UI 及其 API。 */
 export function createBridgeServer({ bridge, config, log = console }) {
   const webPassword = config.web.password ?? '';
 
