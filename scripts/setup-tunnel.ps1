@@ -1,4 +1,4 @@
-<#
+﻿<#
   One-shot setup for a Cloudflare named tunnel.
   Prerequisite: already authorized via `cloudflared tunnel login` (so ~/.cloudflared/cert.pem exists).
 
@@ -15,7 +15,7 @@ param(
   [Parameter(Mandatory = $true)][string]$Domain,
   [string]$TunnelName = "dsh-bridge",
   [int]$LocalPort = 8787,
-  [string]$Cloudflared = "C:\Users\Joe\cloudflared\cloudflared.exe"
+  [string]$Cloudflared = (Join-Path $env:USERPROFILE 'cloudflared\cloudflared.exe')
 )
 
 $ErrorActionPreference = "Stop"

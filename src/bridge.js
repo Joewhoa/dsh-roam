@@ -8,6 +8,14 @@ function assistantDelta(ev) {
   return '';
 }
 
+/** 从 session 事件里提取 assistant 的流式思考增量（reasoning-delta）。 */
+function assistantReasoningDelta(ev) {
+  if (ev.type === 'assistant/chunk' && ev.data?.chunk?.type === 'reasoning-delta') {
+    return ev.data.chunk.text ?? '';
+  }
+  return '';
+}
+
 /** 从 assistant/message 事件里提取完整文本（拼接所有 text 块）。 */
 function assistantMessageText(ev) {
   if (ev.type !== 'assistant/message') return '';
@@ -126,6 +134,11 @@ export class Bridge {
           h.parts.push(delta);
           if (h.onDelta) h.onDelta(delta);
         }
+        const reasoning = assistantReasoningDelta(ev);
+        if (h && reasoning) {
+          h.reasoningParts.push(reasoning);
+          if (h.onReasoning) h.onReasoning(reasoning);
+        }
         const msgText = assistantMessageText(ev);
         if (h && msgText) h.lastMessageText = msgText;
         // —— 单次对话消费统计（仿 dsh-balance-capsule：从 usage 算成本）——
@@ -233,15 +246,15 @@ export class Bridge {
     }
   }
 
-  /** 发送消息并流式回调每个 text-delta；返回 promise（resolve 于 turn/end）。blocks 为内容块（支持上传文件/图片）。 */
-  async sendMessageStream(sessionId, content, onDelta, blocks) {
+  /** 发送消息并流式回调每个 text-delta / reasoning-delta；返回 promise（resolve 于 turn/end）。blocks 为内容块（支持上传文件/图片）。 */
+  async sendMessageStream(sessionId, content, onDelta, blocks, onReasoning) {
     const line = typeof content === 'string' ? content.trim() : '';
     if (line.startsWith('/')) {
       const commandResult = await this._executeSlashCommand(sessionId, line, blocks);
       if (commandResult) return commandResult;
     }
 
-    const waiter = this.beginWait(sessionId, { onDelta });
+    const waiter = this.beginWait(sessionId, { onDelta, onReasoning });
     try {
       await this.dsh.sessionPrompt({
         sessionId,
@@ -256,14 +269,16 @@ export class Bridge {
   }
 
   /** 注册一个等待本轮结束的 pending 处理器，返回 promise + cancel。 */
-  beginWait(sessionId, { onDelta } = {}) {
+  beginWait(sessionId, { onDelta, onReasoning } = {}) {
     let h;
     const promise = new Promise((resolve) => {
       h = {
         resolve,
         parts: [],
+        reasoningParts: [],
         lastMessageText: '',
         onDelta,
+        onReasoning,
         timer: setTimeout(() => {
           if (this.pending.get(sessionId) === h) {
             this.pending.delete(sessionId);

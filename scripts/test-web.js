@@ -3,16 +3,18 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { createServer as createNetServer } from 'node:net';
+import { createServer as createHttpServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { Bridge } from '../src/bridge.js';
+import { DshClient } from '../src/dsh/client.js';
 import { createBridgeServer } from '../src/server.js';
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function fixture({ commandsError = false, historyEvents = [], catalogDelayMs = 0, cancelDelayMs = 0, sendDelayMs = 0, sessionItems, workspaceData, sendResult } = {}) {
-  const state = { sendCalls: [], cancelCalls: [], historyEvents };
+function fixture({ commandsError = false, historyEvents = [], catalogDelayMs = 0, cancelDelayMs = 0, sendDelayMs = 0, historyDelayMs = 0, sessionItems, workspaceData, sendResult, webPassword = '' } = {}) {
+  const state = { sendCalls: [], cancelCalls: [], historyEvents, historyBySession: {}, subagentEntries: [] };
   const dsh = {
     async commandsList({ sessionId }) {
       assert.equal(sessionId, 'session-test');
@@ -46,8 +48,20 @@ function fixture({ commandsError = false, historyEvents = [], catalogDelayMs = 0
       };
     },
     async workspaceList() { return workspaceData ?? { items: [], archivedSessionIds: [] }; },
-    async sessionHistory() { return { events: state.historyEvents, hasMore: false }; },
+    async sessionHistory({ sessionId, maxMessages, beforeSeq }) {
+      if (historyDelayMs) await delay(historyDelayMs);
+      const all = state.historyBySession[sessionId] ?? state.historyEvents ?? [];
+      const filtered = (beforeSeq !== undefined && beforeSeq !== null)
+        ? all.filter((e) => ((e.event ?? {}).seq ?? 0) < beforeSeq)
+        : all;
+      const page = filtered.slice(-(maxMessages ?? filtered.length));
+      return { events: page, hasMore: filtered.length > page.length };
+    },
     async sessionModels() { return { current: null, groups: [], routable: false }; },
+    async subagentList({ parentSessionId }) {
+      return { entries: state.subagentEntries ?? [], parentAvailable: true };
+    },
+    async subagentHistory() { return { events: [], hasMore: false }; },
     async sessionCancel({ sessionId }) {
       state.cancelCalls.push(sessionId);
       if (cancelDelayMs) await delay(cancelDelayMs);
@@ -66,7 +80,7 @@ function fixture({ commandsError = false, historyEvents = [], catalogDelayMs = 0
       return sendResult ?? { kind: 'done', text: '收到' };
     },
   };
-  const config = { web: { password: '' }, dsh: {}, deepseekApiKey: '' };
+  const config = { web: { password: webPassword }, dsh: {}, deepseekApiKey: '' };
   return { bridge, config, state };
 }
 
@@ -159,7 +173,7 @@ async function evaluate(cdp, expression) {
   return response.result.value;
 }
 
-async function withBrowser(baseUrl, run, { beforeReload, windowSize = '390,844' } = {}) {
+async function withBrowser(baseUrl, run, { beforeReload, windowSize = '390,844', mobile = false } = {}) {
   const debugPort = await freePort();
   const profile = mkdtempSync(join(tmpdir(), 'dsh-roam-edge-'));
   const edge = spawn(edgePath(), [
@@ -182,6 +196,10 @@ async function withBrowser(baseUrl, run, { beforeReload, windowSize = '390,844' 
     cdp = new CdpClient(page.webSocketDebuggerUrl);
     await cdp.call('Runtime.enable');
     await cdp.call('Page.enable');
+    if (mobile) {
+      // 模拟触屏：让 (hover: hover) and (pointer: fine) 为 false，复现手机端
+      await cdp.call('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+    }
     await cdp.call('Page.navigate', { url: baseUrl });
     await waitFor(() => evaluate(cdp, `location.origin === ${JSON.stringify(baseUrl)}`), 'Edge did not navigate to dsh-roam');
     await evaluate(cdp, `localStorage.setItem('dsh_pw', 'test'); localStorage.setItem('dsh_last_session', 'session-test'); true`);
@@ -202,6 +220,65 @@ async function withBrowser(baseUrl, run, { beforeReload, windowSize = '390,844' 
     catch (e) { if (e.code !== 'EPERM' && e.code !== 'ENOENT' && e.code !== 'EBUSY') throw e; }
   }
 }
+
+test('web API rejects unauthenticated and wrong-password requests', async () => {
+  await withServer(async (baseUrl) => {
+    const unauth = await fetch(`${baseUrl}/web/api/sessions`);
+    assert.equal(unauth.status, 401);
+    const wrong = await fetch(`${baseUrl}/web/api/sessions`, { headers: { authorization: 'Bearer wrong' } });
+    assert.equal(wrong.status, 401);
+    const ok = await fetch(`${baseUrl}/web/api/sessions`, { headers: { authorization: 'Bearer secret' } });
+    assert.equal(ok.status, 200);
+  }, { webPassword: 'secret' });
+});
+
+test('DshClient.call() sends a client-request envelope and unwraps the value', async () => {
+  let captured;
+  const server = createHttpServer((req, res) => {
+    let body = '';
+    req.on('data', (c) => body += c);
+    req.on('end', () => {
+      captured = JSON.parse(body);
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ type: 'server-response', rpcId: captured.rpcId, result: { ok: true, value: { hello: 'world' } } }));
+    });
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  try {
+    const client = new DshClient(`http://127.0.0.1:${server.address().port}`);
+    const value = await client.call('session.list', { a: 1 });
+    assert.deepEqual(value, { hello: 'world' });
+    assert.equal(captured.type, 'client-request');
+    assert.equal(captured.method, 'session.list');
+    assert.deepEqual(captured.payload, { a: 1 });
+    assert.ok(captured.rpcId);
+  } finally {
+    server.close();
+    await once(server, 'close');
+  }
+});
+
+test('DshClient.call() rejects a business error', async () => {
+  const server = createHttpServer((req, res) => {
+    let body = '';
+    req.on('data', (c) => body += c);
+    req.on('end', () => {
+      const { rpcId } = JSON.parse(body);
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ type: 'server-response', rpcId, result: { ok: false, error: { code: 'not-found', message: 'nope', details: {} } } }));
+    });
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  try {
+    const client = new DshClient(`http://127.0.0.1:${server.address().port}`);
+    await assert.rejects(() => client.call('session.list', {}), /not-found/);
+  } finally {
+    server.close();
+    await once(server, 'close');
+  }
+});
 
 test('sessions API hides blank and archived sessions and returns workspace groups', async () => {
   const sessionItems = [
@@ -323,6 +400,82 @@ test('Bridge cancellation settles an active stream without waiting for turn/end'
   assert.equal(bridge.pending.has('session-test'), false);
 });
 
+test('Bridge streams reasoning deltas separately from text', async () => {
+  const bridge = new Bridge({ dsh: {}, config: { dsh: {} }, turnTimeoutMs: 5000 });
+  const deltas = [];
+  const reasonings = [];
+  const waiter = bridge.beginWait('session-test', {
+    onDelta: (d) => deltas.push(d),
+    onReasoning: (d) => reasonings.push(d),
+  });
+  bridge.dispatch({ payload: { type: 'session/event', sessionId: 'session-test', event: { type: 'assistant/chunk', data: { chunk: { type: 'reasoning-delta', index: 0, text: '让我想想' } } } } });
+  bridge.dispatch({ payload: { type: 'session/event', sessionId: 'session-test', event: { type: 'assistant/chunk', data: { chunk: { type: 'text-delta', index: 1, text: '答案是 42' } } } } });
+  bridge.dispatch({ payload: { type: 'session/event', sessionId: 'session-test', event: { type: 'turn/end', data: { reason: { kind: 'completed' } } } } });
+  const result = await waiter.promise;
+  assert.deepEqual(reasonings, ['让我想想']);
+  assert.deepEqual(deltas, ['答案是 42']);
+  assert.equal(result.kind, 'done');
+});
+
+test('subagents endpoint returns child entries with running state', async () => {
+  await withServer(async (baseUrl, { state }) => {
+    state.subagentEntries = [
+      { kind: 'child', id: 'child-1', activity: 'running', hasChildren: false, mode: 'continuable', label: '审查助手' },
+      { kind: 'child', id: 'child-2', activity: 'inactive', hasChildren: false, mode: 'one-shot' },
+    ];
+    const r = await fetch(`${baseUrl}/web/api/subagents?sessionId=session-test`);
+    assert.equal(r.status, 200);
+    assert.deepEqual(await r.json(), { entries: state.subagentEntries, parentAvailable: true });
+  });
+});
+
+test('thirty subagents stay collapsed by default and expand inside a scroll area', async () => {
+  await withServer(async (baseUrl, { state }) => {
+    state.subagentEntries = Array.from({ length: 30 }, (_, i) => ({
+      kind: 'child',
+      id: `child-${i + 1}`,
+      activity: i < 3 ? 'running' : 'inactive',
+      hasChildren: false,
+      mode: i % 2 ? 'one-shot' : 'continuable',
+      ...(i % 2 ? {} : { label: `子 agent ${i + 1} - 长任务标签` }),
+    }));
+    await withBrowser(baseUrl, async (cdp) => {
+      await waitFor(
+        () => evaluate(cdp, `document.getElementById('subagentBar').classList.contains('show')`),
+        'subagent bar did not render',
+      );
+      assert.equal(
+        await evaluate(cdp, `document.querySelector('#subagentBar .subagent-title').textContent`),
+        '🤖 3 个工作中 · 27 个空闲 · 共 30 个',
+      );
+      assert.equal(await evaluate(cdp, `document.getElementById('subagentBar').classList.contains('expanded')`), false);
+      assert.equal(await evaluate(cdp, `getComputedStyle(document.querySelector('#subagentBar .subagent-list')).display`), 'none');
+      assert.ok(await evaluate(cdp, `document.getElementById('subagentBar').getBoundingClientRect().height <= 42`));
+
+      await evaluate(cdp, `document.querySelector('#subagentBar .subagent-summary').click()`);
+      assert.equal(await evaluate(cdp, `document.getElementById('subagentBar').classList.contains('expanded')`), true);
+      assert.equal(await evaluate(cdp, `getComputedStyle(document.querySelector('#subagentBar .subagent-list')).display`), 'flex');
+      assert.equal(await evaluate(cdp, `document.querySelectorAll('#subagentBar .subagent-item').length`), 30);
+      assert.ok(await evaluate(cdp, `(() => { const list = document.querySelector('#subagentBar .subagent-list'); return list.scrollHeight > list.clientHeight && list.clientHeight <= 220; })()`));
+      assert.equal(await evaluate(cdp, `localStorage.getItem('dsh_subagents_expanded')`), '1');
+    });
+  });
+});
+
+test('history includes assistant reasoning blocks', async () => {
+  const historyEvents = [
+    { event: { seq: 1, type: 'assistant/message', data: { message: { content: [
+      { type: 'reasoning', text: '让我想想…' },
+      { type: 'text', text: '答案是 42' },
+    ] } } } },
+  ];
+  await withServer(async (baseUrl) => {
+    const r = await fetch(`${baseUrl}/web/api/history?sessionId=session-test&maxMessages=5`);
+    const d = await r.json();
+    assert.deepEqual(d.messages, [{ role: 'assistant', text: '答案是 42', reasoning: '让我想想…', seq: 1 }]);
+  }, { historyEvents });
+});
+
 test('cancel API returns the real DSH acceptance receipt', async () => {
   await withServer(async (baseUrl, { state }) => {
     const response = await fetch(`${baseUrl}/web/api/cancel`, {
@@ -420,6 +573,55 @@ test('a stream started in one session clears that session after switching away',
   }, { sessionItems, sendDelayMs: 200 });
 });
 
+test('a stale syncHistory response does not pollute the newly opened session', async () => {
+  const sessionItems = [
+    { sessionId: 'session-test', origin: 'user', blank: false, running: false, updatedAt: 2, projections: { values: { title: '会话 A' } } },
+    { sessionId: 'session-other', origin: 'user', blank: false, running: false, updatedAt: 1, projections: { values: { title: '会话 B' } } },
+  ];
+  await withServer(async (baseUrl, { state }) => {
+    state.historyBySession = {
+      'session-test': [{ event: { seq: 1, type: 'user/message', data: { content: [{ type: 'text', text: 'A1' }], source: { kind: 'user' } } } }],
+      'session-other': [],
+    };
+    await withBrowser(baseUrl, async (cdp) => {
+      await waitFor(() => evaluate(cdp, `document.querySelectorAll('.msg').length === 1`), 'session A did not load');
+      // A 产生新消息 seq 2，然后触发一个延迟中的 syncHistory（拉 A），并立即切到 B
+      state.historyBySession['session-test'] = [
+        { event: { seq: 1, type: 'user/message', data: { content: [{ type: 'text', text: 'A1' }], source: { kind: 'user' } } } },
+        { event: { seq: 2, type: 'user/message', data: { content: [{ type: 'text', text: 'A2' }], source: { kind: 'user' } } } },
+      ];
+      await evaluate(cdp, `syncHistory(); true`);           // 不 await，让它悬着
+      await evaluate(cdp, `openSession('session-other')`); // 立即切 B
+      await waitFor(() => evaluate(cdp, `currentSessionId === 'session-other' && document.getElementById('loadingEl') === null`), 'did not switch to session B');
+      await delay(350);   // 等 A 的过期 syncHistory 响应落地
+      assert.deepEqual(await evaluate(cdp, `(sessionCache.get('session-other') || {}).messages || []`), []);
+      assert.equal(await evaluate(cdp, `document.querySelectorAll('.msg').length`), 0);
+    });
+  }, { sessionItems, historyDelayMs: 200 });
+});
+
+test('running banner and sidebar label show for a streaming session after switching', async () => {
+  const sessionItems = [
+    { sessionId: 'session-test', origin: 'user', blank: false, running: false, updatedAt: 2, projections: { values: { title: '会话 A' } } },
+    { sessionId: 'session-other', origin: 'user', blank: false, running: false, updatedAt: 1, projections: { values: { title: '会话 B' } } },
+  ];
+  await withServer(async (baseUrl, { state }) => {
+    await withBrowser(baseUrl, async (cdp) => {
+      await waitFor(() => evaluate(cdp, `document.getElementById('loadingEl') === null`), 'session A did not load');
+      await evaluate(cdp, `(() => {
+        document.getElementById('input').value = '长任务';
+        document.getElementById('send').click();
+      })()`);
+      await waitFor(() => state.sendCalls.length === 1, 'stream did not start');
+      await waitFor(() => evaluate(cdp, `document.getElementById('runningBanner').classList.contains('show')`), 'running banner did not show while streaming');
+      await evaluate(cdp, `openSession('session-other')`);
+      await waitFor(() => evaluate(cdp, `currentSessionId === 'session-other' && document.getElementById('loadingEl') === null`), 'did not switch to session B');
+      assert.equal(await evaluate(cdp, `document.querySelector('.sess[data-session-id="session-test"]').classList.contains('running')`), true);
+      assert.equal(await evaluate(cdp, `document.querySelector('.sess[data-session-id="session-test"] .run-label').textContent`), '运行中');
+    });
+  }, { sessionItems, sendDelayMs: 400 });
+});
+
 test('cancel appends a system interruption marker in the conversation', async () => {
   const sessionItems = [
     { sessionId: 'session-test', origin: 'user', blank: false, running: true, updatedAt: 1, projections: { values: { title: '运行中' } } },
@@ -483,7 +685,7 @@ test('clear-cache button is removed and refresh re-fetches the session authorita
         ['正确消息', '正确回复'],
       );
     }, {
-      beforeReload: `localStorage.setItem('dsh_cache_version', '2'); localStorage.setItem('dsh_cache', ${JSON.stringify(staleCache)}); true`,
+      beforeReload: `localStorage.setItem('dsh_cache_version', '3'); localStorage.setItem('dsh_cache', ${JSON.stringify(staleCache)}); true`,
     });
   }, { historyEvents });
 });
@@ -496,7 +698,7 @@ test('a floating bubble appears for new messages when scrolled up', async () => 
     state.historyEvents = initial.slice();
     await withBrowser(baseUrl, async (cdp) => {
       await waitFor(
-        () => evaluate(cdp, `document.querySelectorAll('.msg.user').length === 30`),
+        () => evaluate(cdp, `document.querySelectorAll('.msg.user').length === 20`),
         'initial messages did not render',
       );
       await evaluate(cdp, `document.getElementById('messages').scrollTop = 0; true`);
@@ -554,6 +756,14 @@ test('history and previews hide skill injections but keep real user text', async
       source: { kind: 'skill-invocation', name: 'grill-me', form: 'instructions' },
     } } },
     { event: { seq: 2, type: 'user/message', data: {
+      content: [{ type: 'text', text: 'Background subagent abc finished and will do no further work.' }],
+      source: { kind: 'subagent-settled', form: 'notice', senderSessionId: 'abc' },
+    } } },
+    { event: { seq: 3, type: 'user/message', data: {
+      content: [{ type: 'text', text: 'Background subagent def reported: something' }],
+      source: { kind: 'subagent-report', senderSessionId: 'def' },
+    } } },
+    { event: { seq: 4, type: 'user/message', data: {
       content: [{ type: 'text', text: '<skill_content name="quoted">real text</skill_content>' }],
       source: { kind: 'user' },
     } } },
@@ -565,6 +775,27 @@ test('history and previews hide skill injections but keep real user text', async
     assert.deepEqual(history.messages.map((message) => message.text), expected);
     assert.deepEqual(previews.previews[0].messages.map((message) => message.text), expected);
   }, { historyEvents });
+});
+
+test('history over-fetches past injected messages to return maxMessages visible', async () => {
+  const events = [
+    { event: { seq: 1, type: 'user/message', data: { content: [{ type: 'text', text: 'M1' }], source: { kind: 'user' } } } },
+    { event: { seq: 2, type: 'user/message', data: { content: [{ type: 'text', text: '注入2' }], source: { kind: 'subagent-settled' } } } },
+    { event: { seq: 3, type: 'user/message', data: { content: [{ type: 'text', text: '注入3' }], source: { kind: 'subagent-settled' } } } },
+    { event: { seq: 4, type: 'user/message', data: { content: [{ type: 'text', text: '注入4' }], source: { kind: 'subagent-settled' } } } },
+    { event: { seq: 5, type: 'user/message', data: { content: [{ type: 'text', text: 'M5' }], source: { kind: 'user' } } } },
+    { event: { seq: 6, type: 'user/message', data: { content: [{ type: 'text', text: 'M6' }], source: { kind: 'user' } } } },
+    { event: { seq: 7, type: 'user/message', data: { content: [{ type: 'text', text: 'M7' }], source: { kind: 'user' } } } },
+    { event: { seq: 8, type: 'user/message', data: { content: [{ type: 'text', text: 'M8' }], source: { kind: 'user' } } } },
+  ];
+  await withServer(async (baseUrl, { state }) => {
+    state.historyBySession['session-test'] = events;
+    const r = await fetch(`${baseUrl}/web/api/history?sessionId=session-test&maxMessages=5`);
+    const d = await r.json();
+    assert.deepEqual(d.messages.map((m) => m.text), ['M1', 'M5', 'M6', 'M7', 'M8']);
+    assert.equal(d.hasMore, false);
+    assert.equal(d.oldestSeq, 1);
+  });
 });
 
 test('typing slash opens commands and skills with Chinese descriptions', async () => {
@@ -654,7 +885,7 @@ test('arrow keys and Enter select a slash candidate without sending', async () =
   });
 });
 
-test('Enter inserts a newline and only the send button submits', async () => {
+test('phone Enter inserts a newline and only the send button submits', async () => {
   await withServer(async (baseUrl, { state }) => {
     await withBrowser(baseUrl, async (cdp) => {
       await evaluate(cdp, `(() => {
@@ -675,7 +906,46 @@ test('Enter inserts a newline and only the send button submits', async () => {
       await evaluate(cdp, `document.getElementById('send').click()`);
       await waitFor(() => state.sendCalls.length === 1, 'send button did not submit the message');
       assert.deepEqual(state.sendCalls, [{ sessionId: 'session-test', content: '第一行' }]);
-    });
+    }, { mobile: true });
+  });
+});
+
+test('desktop Enter sends and Shift+Enter inserts a newline', async () => {
+  await withServer(async (baseUrl, { state }) => {
+    await withBrowser(baseUrl, async (cdp) => {
+      assert.equal(await evaluate(cdp, `isDesktopDevice()`), true);
+      // 桌面 Enter（无 Shift）→ 发送
+      await evaluate(cdp, `(() => {
+        const input = document.getElementById('input');
+        input.value = '桌面发送';
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      })()`);
+      await cdp.call('Input.dispatchKeyEvent', {
+        type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
+      });
+      await cdp.call('Input.dispatchKeyEvent', {
+        type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
+      });
+      await waitFor(() => state.sendCalls.length === 1, 'desktop Enter did not send');
+      assert.equal(state.sendCalls[0].content, '桌面发送');
+      // Shift+Enter → 换行（不发送）
+      await evaluate(cdp, `(() => {
+        const input = document.getElementById('input');
+        input.value = '第一行';
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      })()`);
+      await cdp.call('Input.dispatchKeyEvent', {
+        type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
+        modifiers: 8, commands: ['insertLineBreak'],
+      });
+      await cdp.call('Input.dispatchKeyEvent', {
+        type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, modifiers: 8,
+      });
+      assert.equal(await evaluate(cdp, `document.getElementById('input').value`), '第一行\n');
+      assert.equal(state.sendCalls.length, 1);
+    }, { windowSize: '1280,900' });
   });
 });
 

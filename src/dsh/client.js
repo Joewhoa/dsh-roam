@@ -135,6 +135,15 @@ export class DshClient {
   }
   /** Read the user-invocable skill catalog for a session. */
   skillList(payload, opts) { return this.call('skill.list', payload, opts); }
+  /** DSH subagent domain: list a parent session's direct child subagents + their running state. */
+  subagentList({ parentSessionId }, opts) { return this.call('subagent.list', { parentSessionId }, opts); }
+  /** DSH subagent domain: read one child subagent's transcript (message-aligned pagination). */
+  subagentHistory({ parentSessionId, childSessionId, mode, beforeSeq, maxMessages }, opts) {
+    const payload = { parentSessionId, childSessionId, mode };
+    if (beforeSeq !== undefined && beforeSeq !== null) payload.beforeSeq = beforeSeq;
+    if (maxMessages !== undefined) payload.maxMessages = maxMessages;
+    return this.call('subagent.history', payload, opts);
+  }
 
   /**
    * 回应一个审批/提问请求。信封是 client-response（不是 client-request）：

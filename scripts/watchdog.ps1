@@ -45,10 +45,10 @@ if ($watchBridge -and -not (Test-Port 8787)) {
 # ---- 3. 隧道（按模式：tailscale / cloudflare / both / none） ----
 if ($tunnelMode -eq 'tailscale' -or $tunnelMode -eq 'both') {
   $serveOk = $false
-  try { if ((tailscale serve status 2>&1 | Out-String) -match '8788') { $serveOk = $true } } catch {}
+  try { if ((tailscale serve status 2>&1 | Out-String) -match '8787') { $serveOk = $true } } catch {}
   if (-not $serveOk) {
     Write-Host "[watchdog] tailscale serve 未生效，重新启用..." -ForegroundColor Yellow
-    tailscale serve --bg 8788 2>&1 | Out-Null
+    tailscale serve --bg 8787 2>&1 | Out-Null
   }
 }
 if ($tunnelMode -eq 'cloudflare' -or $tunnelMode -eq 'both') {

@@ -1,16 +1,32 @@
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { createHash, timingSafeEqual } from 'node:crypto';
 
 const INDEX_HTML = readFileSync(fileURLToPath(new URL('../web/index.html', import.meta.url)), 'utf8');
 const LOGO_SVG = readFileSync(fileURLToPath(new URL('../web/logo.svg', import.meta.url)), 'utf8');
 
-function readBody(req) {
+// 分级 body 上限：普通控制接口 1MB，/send 32MB（容纳单张 20MB 图片的 base64）。
+const BODY_LIMIT = 1024 * 1024;
+const SEND_BODY_LIMIT = 32 * 1024 * 1024;
+
+function readBody(req, maxBytes = BODY_LIMIT) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-    req.on('data', (c) => chunks.push(c));
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-    req.on('error', reject);
+    let size = 0;
+    let done = false;
+    req.on('data', (c) => {
+      if (done) return;
+      size += c.length;
+      if (size > maxBytes) {
+        done = true;
+        reject(Object.assign(new Error('payload too large'), { status: 413 }));
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on('end', () => { if (!done) { done = true; resolve(Buffer.concat(chunks).toString('utf8')); } });
+    req.on('error', (e) => { if (!done) { done = true; reject(e); } });
   });
 }
 
@@ -19,19 +35,42 @@ function json(res, status, obj) {
   res.end(JSON.stringify(obj));
 }
 
-/** 从内容块数组里拼接所有 text 块。 */
+/** 从内容块数组里拼接所有 text 块（统一 '' 拼接，与 bridge.js 的 assistantMessageText 一致）。 */
 function blockText(content) {
   if (!Array.isArray(content)) return '';
   return content
     .filter((b) => b && b.type === 'text' && typeof b.text === 'string')
     .map((b) => b.text)
-    .join(' ');
+    .join('');
+}
+
+/** 从内容块数组里拼接所有 reasoning（思考）块，无则返回空串。 */
+function reasoningText(content) {
+  if (!Array.isArray(content)) return '';
+  return content
+    .filter((b) => b && b.type === 'reasoning' && typeof b.text === 'string')
+    .map((b) => b.text)
+    .join('');
 }
 
 /** 判断是否为 DSH 注入的非用户上下文，这类不应显示为用户气泡。 */
 function isInjectedContext(ev, text) {
-  if (ev?.data?.source?.kind === 'skill-invocation') return true;
+  // DSH 会把技能注入、子 agent 结算/报告等非用户内容也写成 user/message，
+  // 用 source.kind 区分：真实用户消息 kind 为 'user'（或缺失 source），其余都是注入。
+  const kind = ev?.data?.source?.kind;
+  if (kind !== undefined && kind !== 'user') return true;
   return typeof text === 'string' && (text.startsWith('Current runtime context') || text.startsWith('<system-reminder>'));
+}
+
+/** 常量时间比较两个字符串（sha256 归一长度后 timingSafeEqual，避免长度泄露）。 */
+function safeEqual(a, b) {
+  const ha = createHash('sha256').update(String(a)).digest();
+  const hb = createHash('sha256').update(String(b)).digest();
+  return timingSafeEqual(ha, hb);
+}
+
+function isLoopback(ip) {
+  return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
 }
 
 /** 桥接 HTTP 服务：/health + 手机网页 UI 及其 API。 */
@@ -39,9 +78,33 @@ export function createBridgeServer({ bridge, config, log = console }) {
   const webPassword = config.web.password ?? '';
 
   function isAuthed(req) {
-    if (!webPassword) return true; // 未设密码则放行（仅限可信网络）
-    return req.headers['authorization'] === `Bearer ${webPassword}`;
+    if (!webPassword) {
+      // 未设密码：只放行 loopback（防御性；正常已绑 127.0.0.1，见 src/index.js）。
+      return isLoopback(req.socket.remoteAddress ?? '');
+    }
+    return safeEqual(req.headers['authorization'] ?? '', `Bearer ${webPassword}`);
   }
+
+  // 按 IP 固定窗口限流（最简版）：窗口 1 分钟，每 IP 最多 240 次，超限 429。
+  const RATE_WINDOW_MS = 60 * 1000;
+  const RATE_MAX = 240;
+  const rateMap = new Map(); // ip -> { count, resetAt }
+  function rateLimited(ip) {
+    const now = Date.now();
+    const entry = rateMap.get(ip);
+    if (!entry || now >= entry.resetAt) {
+      rateMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
+      return false;
+    }
+    entry.count += 1;
+    return entry.count > RATE_MAX;
+  }
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, entry] of rateMap) {
+      if (now >= entry.resetAt) rateMap.delete(ip);
+    }
+  }, RATE_WINDOW_MS).unref();
 
   return createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
@@ -65,8 +128,10 @@ export function createBridgeServer({ bridge, config, log = console }) {
         return;
       }
 
-      // ── Web API（带密码）─────────────────────────────────────
+      // ── Web API（带密码 + 限流）─────────────────────────────────────
       if (path.startsWith('/web/api/')) {
+        const ip = req.socket.remoteAddress ?? 'unknown';
+        if (rateLimited(ip)) { json(res, 429, { error: 'too many requests' }); return; }
         if (!isAuthed(req)) { json(res, 401, { error: 'unauthorized' }); return; }
 
         if (req.method === 'GET' && path === '/web/api/sessions') {
@@ -142,24 +207,49 @@ export function createBridgeServer({ bridge, config, log = console }) {
           const sessionId = url.searchParams.get('sessionId');
           if (!sessionId) { json(res, 400, { error: 'missing sessionId' }); return; }
           const beforeSeq = url.searchParams.get('beforeSeq');
-          const maxMessages = Math.min(Number(url.searchParams.get('maxMessages') ?? 200) || 200, 200);
-          const payload = { sessionId, maxMessages };
-          if (beforeSeq !== null && beforeSeq !== '') payload.beforeSeq = Number(beforeSeq);
-          const h = await bridge.dsh.sessionHistory(payload);
-          const messages = [];
-          let oldestSeq = null;
-          for (const entry of h.events ?? []) {
-            const ev = entry.event ?? {};
-            if (typeof ev.seq === 'number' && (oldestSeq === null || ev.seq < oldestSeq)) oldestSeq = ev.seq;
-            if (ev.type === 'user/message') {
-              const t = blockText(ev.data?.content);
-              if (t && !isInjectedContext(ev, t)) messages.push({ role: 'user', text: t, seq: ev.seq });
-            } else if (ev.type === 'assistant/message') {
-              const t = blockText(ev.data?.message?.content);
-              if (t) messages.push({ role: 'assistant', text: t, seq: ev.seq });
+          const wanted = Math.min(Number(url.searchParams.get('maxMessages') ?? 200) || 200, 200);
+          const cursor0 = (beforeSeq !== null && beforeSeq !== '') ? Number(beforeSeq) : undefined;
+
+          // 按「可见消息」分页：DSH 的 maxMessages 按原始消息数返回（含注入内容），
+          // 过滤注入后可能不足 wanted，循环向前补页直到凑满 wanted 条可见消息或没有更早的。
+          const messages = [];   // 可见消息，整体升序（旧在前、新在后）
+          let oldestEventSeq = null;
+          let hasMore = false;
+          let cursor = cursor0;
+          for (let round = 0; round < 8 && messages.length < wanted; round++) {
+            const payload = { sessionId, maxMessages: wanted };
+            if (cursor !== undefined) payload.beforeSeq = cursor;
+            const h = await bridge.dsh.sessionHistory(payload);
+            const events = h.events ?? [];
+            const page = [];
+            let pageOldest = null;
+            for (const entry of events) {
+              const ev = entry.event ?? {};
+              if (typeof ev.seq === 'number' && (pageOldest === null || ev.seq < pageOldest)) pageOldest = ev.seq;
+              if (ev.type === 'user/message') {
+                const t = blockText(ev.data?.content);
+                if (t && !isInjectedContext(ev, t)) page.push({ role: 'user', text: t, seq: ev.seq });
+              } else if (ev.type === 'assistant/message') {
+                const t = blockText(ev.data?.message?.content);
+                const r = reasoningText(ev.data?.message?.content);
+                if (t || r) page.push({ role: 'assistant', text: t, ...(r ? { reasoning: r } : {}), seq: ev.seq });
+              }
             }
+            hasMore = !!h.hasMore;
+            if (pageOldest !== null) oldestEventSeq = pageOldest;
+            // 本页比之前页更老，前置到数组头保持整体升序
+            messages.unshift(...page);
+            if (!hasMore || events.length === 0 || pageOldest === null) break;
+            cursor = pageOldest;
           }
-          json(res, 200, { messages, hasMore: !!h.hasMore, oldestSeq });
+
+          // 取最接近游标的 wanted 条（最新），升序返回；游标=返回中最早可见消息的 seq。
+          const returned = messages.slice(-wanted);
+          json(res, 200, {
+            messages: returned,
+            hasMore: hasMore || messages.length > wanted,
+            oldestSeq: returned.length ? returned[0].seq : oldestEventSeq,
+          });
           return;
         }
 
@@ -174,7 +264,7 @@ export function createBridgeServer({ bridge, config, log = console }) {
 
         if (req.method === 'POST' && path === '/web/api/send') {
           let body;
-          try { body = JSON.parse(await readBody(req)); } catch { json(res, 400, { error: 'bad json' }); return; }
+          try { body = JSON.parse(await readBody(req, SEND_BODY_LIMIT)); } catch (e) { json(res, e.status || 400, { error: e.status === 413 ? 'payload too large' : 'bad json' }); return; }
           const { sessionId, content, blocks } = body;
           if (!sessionId || (!content && !blocks)) { json(res, 400, { error: 'missing sessionId/content' }); return; }
 
@@ -190,7 +280,7 @@ export function createBridgeServer({ bridge, config, log = console }) {
           // SSE 心跳保活：agent 长时间思考时无数据帧，连接易被中间层掐断；每 5s 发一个注释帧维持
           const keepAlive = setInterval(() => { try { res.write(': ping\n\n'); } catch { /* 连接已断 */ } }, 5000);
           try {
-            const result = await bridge.sendMessageStream(sessionId, content, (delta) => emit({ type: 'delta', text: delta }), blocks);
+            const result = await bridge.sendMessageStream(sessionId, content, (delta) => emit({ type: 'delta', text: delta }), blocks, (delta) => emit({ type: 'reasoning', text: delta }));
             if (result.kind === 'done') emit({ type: 'done', text: result.text ?? '' });
             else if (result.kind === 'error') emit({ type: 'error', error: result.error?.message ?? result.error?.code ?? 'unknown' });
             else if (result.kind === 'cancelled') emit({ type: 'cancelled', text: result.text ?? '' });
@@ -206,7 +296,7 @@ export function createBridgeServer({ bridge, config, log = console }) {
 
         if (req.method === 'POST' && path === '/web/api/cancel') {
           let body;
-          try { body = JSON.parse(await readBody(req)); } catch { json(res, 400, { error: 'bad json' }); return; }
+          try { body = JSON.parse(await readBody(req)); } catch (e) { json(res, e.status || 400, { error: e.status === 413 ? 'payload too large' : 'bad json' }); return; }
           if (!body.sessionId) { json(res, 400, { error: 'missing sessionId' }); return; }
           const receipt = await bridge.cancelSession(body.sessionId);
           if (receipt?.accepted !== true) { json(res, 409, { ok: false, accepted: false }); return; }
@@ -217,7 +307,7 @@ export function createBridgeServer({ bridge, config, log = console }) {
         // 排队发送消息（不等回复，回复由前端轮询自动显示；用于审批附带的文本指令）
         if (req.method === 'POST' && path === '/web/api/send-queued') {
           let body;
-          try { body = JSON.parse(await readBody(req)); } catch { json(res, 400, { error: 'bad json' }); return; }
+          try { body = JSON.parse(await readBody(req)); } catch (e) { json(res, e.status || 400, { error: e.status === 413 ? 'payload too large' : 'bad json' }); return; }
           const { sessionId, content } = body;
           if (!sessionId || !content) { json(res, 400, { error: 'missing sessionId/content' }); return; }
           await bridge.dsh.sessionPrompt({ sessionId, mode: 'queue', content: [{ type: 'text', text: content }] });
@@ -238,7 +328,7 @@ export function createBridgeServer({ bridge, config, log = console }) {
         // 提交提问回答 / 审批决定（转发给 DSH 的 respond）
         if (req.method === 'POST' && path === '/web/api/respond') {
           let body;
-          try { body = JSON.parse(await readBody(req)); } catch { json(res, 400, { error: 'bad json' }); return; }
+          try { body = JSON.parse(await readBody(req)); } catch (e) { json(res, e.status || 400, { error: e.status === 413 ? 'payload too large' : 'bad json' }); return; }
           if (!body.rpcId || !body.value) { json(res, 400, { error: 'missing rpcId/value' }); return; }
           const receipt = await bridge.dsh.respond(body.rpcId, body.value);
           json(res, 200, receipt);
@@ -260,6 +350,42 @@ export function createBridgeServer({ bridge, config, log = console }) {
           return;
         }
 
+        // 查询当前会话的直接子 agent 及运行状态（用于「子 agent 工作中」监控）
+        if (req.method === 'GET' && path === '/web/api/subagents') {
+          const sessionId = url.searchParams.get('sessionId');
+          if (!sessionId) { json(res, 400, { error: 'missing sessionId' }); return; }
+          const catalog = await bridge.dsh.subagentList({ parentSessionId: sessionId });
+          json(res, 200, catalog);
+          return;
+        }
+
+        // 查看某个子 agent 的历史（消息对齐分页，同 session.history 语义）
+        if (req.method === 'GET' && path === '/web/api/subagent-history') {
+          const parentSessionId = url.searchParams.get('sessionId');
+          const childSessionId = url.searchParams.get('childSessionId');
+          const mode = url.searchParams.get('mode');
+          if (!parentSessionId || !childSessionId || !mode) { json(res, 400, { error: 'missing sessionId/childSessionId/mode' }); return; }
+          const beforeSeq = url.searchParams.get('beforeSeq');
+          const maxMessages = Math.min(Number(url.searchParams.get('maxMessages') ?? 200) || 200, 200);
+          const payload = { parentSessionId, childSessionId, mode, maxMessages };
+          if (beforeSeq !== null && beforeSeq !== '') payload.beforeSeq = Number(beforeSeq);
+          const h = await bridge.dsh.subagentHistory(payload);
+          const messages = [];
+          for (const entry of h.events ?? []) {
+            const ev = entry.event ?? {};
+            if (ev.type === 'user/message') {
+              const t = blockText(ev.data?.content);
+              if (t && !isInjectedContext(ev, t)) messages.push({ role: 'user', text: t, seq: ev.seq });
+            } else if (ev.type === 'assistant/message') {
+              const t = blockText(ev.data?.message?.content);
+              const r = reasoningText(ev.data?.message?.content);
+              if (t || r) messages.push({ role: 'assistant', text: t, ...(r ? { reasoning: r } : {}), seq: ev.seq });
+            }
+          }
+          json(res, 200, { messages, hasMore: !!h.hasMore });
+          return;
+        }
+
         // 查询当前会话的模型（当前选择 + 可用分组）
         if (req.method === 'GET' && path === '/web/api/model') {
           const sessionId = url.searchParams.get('sessionId');
@@ -276,7 +402,7 @@ export function createBridgeServer({ bridge, config, log = console }) {
         // 切换当前会话的模型
         if (req.method === 'POST' && path === '/web/api/model') {
           let body;
-          try { body = JSON.parse(await readBody(req)); } catch { json(res, 400, { error: 'bad json' }); return; }
+          try { body = JSON.parse(await readBody(req)); } catch (e) { json(res, e.status || 400, { error: e.status === 413 ? 'payload too large' : 'bad json' }); return; }
           if (!body.sessionId || !body.provider || !body.model) { json(res, 400, { error: 'missing fields' }); return; }
           const selected = await bridge.dsh.sessionSelectModel({
             sessionId: body.sessionId,
@@ -342,7 +468,7 @@ export function createBridgeServer({ bridge, config, log = console }) {
                 const ev = entry.event ?? {};
                 if (typeof ev.seq === 'number' && (oldestSeq === null || ev.seq < oldestSeq)) oldestSeq = ev.seq;
                 if (ev.type === 'user/message') { const t = blockText(ev.data?.content); if (t && !isInjectedContext(ev, t)) messages.push({ role: 'user', text: t, seq: ev.seq }); }
-                else if (ev.type === 'assistant/message') { const t = blockText(ev.data?.message?.content); if (t) messages.push({ role: 'assistant', text: t, seq: ev.seq }); }
+                else if (ev.type === 'assistant/message') { const t = blockText(ev.data?.message?.content); const r = reasoningText(ev.data?.message?.content); if (t || r) messages.push({ role: 'assistant', text: t, ...(r ? { reasoning: r } : {}), seq: ev.seq }); }
               }
               previews.push({
                 sessionId: it.sessionId, title: it.title, running: !!it.running,

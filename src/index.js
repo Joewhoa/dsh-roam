@@ -30,8 +30,11 @@ async function main() {
   const bridge = new Bridge({ dsh, config, log });
   await bridge.start();
 
+  if (!config.web.password) {
+    log.warn('[security] WEB_PASSWORD 未设置：仅允许本机 loopback 访问；通过隧道暴露前必须设置密码。');
+  }
   const server = createBridgeServer({ bridge, config, log });
-  server.listen(config.server.port, () => {
+  server.listen(config.server.port, '127.0.0.1', () => {
     log.info(`[startup] 桥接已启动: http://127.0.0.1:${config.server.port}`);
     log.info('[startup] 手机/桌面浏览器经隧道访问（Tailscale：https://<机器名>.<tailnet>.ts.net/ 或 Cloudflare：你的域名）');
   });

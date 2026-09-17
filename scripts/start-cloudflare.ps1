@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 #  DSH 手机控制台 一键启动脚本（Windows PowerShell）
 #  启动：dsh web + 桥接(node src/index.js) + cloudflared 隧道
 #  幂等：已运行的进程会自动跳过，可随时重复运行
@@ -9,12 +9,12 @@ param([switch]$Silent)
 
 $ErrorActionPreference = 'SilentlyContinue'
 
-# ---- 路径配置（换机器时改这里）----
-$BridgeDir   = "D:\Software\AI Tools\DeepSeek Harness\dsh-roam"
-$Cloudflared = "C:\Users\Joe\cloudflared\cloudflared.exe"
-$TunnelCfg   = "C:\Users\Joe\.cloudflared\config-dsh.yml"
-$TunnelName  = "dsh-bridge"
-$MobileUrl   = "https://chat.your-domain.com"
+# ---- 路径配置（从脚本位置与环境变量推导，可移植）----
+$BridgeDir   = Split-Path $PSScriptRoot -Parent
+$Cloudflared = Join-Path $env:USERPROFILE 'cloudflared\cloudflared.exe'
+$TunnelCfg   = Join-Path $env:USERPROFILE '.cloudflared\config-dsh.yml'
+$TunnelName  = if ($env:DSH_TUNNEL_NAME) { $env:DSH_TUNNEL_NAME } else { 'dsh-bridge' }
+$MobileUrl   = if ($env:DSH_MOBILE_URL) { $env:DSH_MOBILE_URL } else { 'https://chat.your-domain.com' }
 
 # 端口是否在监听（快速判断进程是否在跑）
 function Test-Port([int]$Port) {
@@ -69,7 +69,7 @@ Write-Host "  注意：隧道连上云端约需 10~30 秒，稍后刷新即可�
 if (-not $Silent) {
   $RunKey   = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
   $RunName  = "DSHMobileConsole"
-  $RunValue = "powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -File `"$PSScriptRoot\start-all.ps1`" -Silent"
+  $RunValue = "powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -File `"$PSScriptRoot\start-cloudflare.ps1`" -Silent"
 
   $choice = Read-Host "`n是否添加至开机自启？(Y=添加 / N=移除 / 回车跳过)"
   if ($choice -match '^[Yy]$') {

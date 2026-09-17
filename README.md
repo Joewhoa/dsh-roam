@@ -39,7 +39,7 @@ flowchart LR
 - **输入**：`/` 弹出命令与技能候选，`@` 快速筛选技能；Enter 换行、点击发送按钮提交
 - **交互**：提问选项按钮、审批"允许 / 拒绝"
 - **上传**：图片与文本文件可多选并暂存在输入区，可移除、继续输入文字，点击发送后作为同一条消息提交
-- **账户**：余额（仅人民币）、单次会话消耗统计
+- **账户**：余额（仅人民币）、单次会话消耗统计（本地按价格表估算，非官方账单）
 - **模型**：切换模型 / 思考强度
 - **界面**：深色 / 浅色 / 跟随系统；手机抽屉侧栏、桌面居中限宽
 - **体验**：会话缓存秒切 + localStorage 持久化（刷新秒开）、后台预载、未读徽章、上翻时新消息浮出气泡、🔄 权威重拉当前会话
@@ -160,13 +160,13 @@ scripts\tray.ps1
 ```
 dsh-roam/
 ├── src/
-│   ├── bridge.js        # 桥接核心：会话映射、流式、提问/审批、模型
+│   ├── index.js         # 入口：拉起桥接 + HTTP 服务
+│   ├── bridge.js        # 桥接核心：流式、审批/提问、模型、费用统计
 │   ├── server.js        # HTTP 服务：静态网页 + /web/api/* 接口
 │   ├── config.js        # 读取 .env
-│   ├── store.js         # JSON 持久化（会话映射）
 │   └── dsh/client.js    # DSH /api 客户端（RPC + WebSocket 流）
 ├── web/index.html       # 前端单文件
-├── scripts/             # 一键启动（Tailscale / Cloudflare）+ 自测
+├── scripts/             # 一键启动（Tailscale / Cloudflare）+ 看门狗 + 自测
 ├── .env.example         # 配置示例（复制为 .env 后填写）
 └── README.md
 ```
@@ -179,7 +179,7 @@ dsh-roam/
 # 三个进程（也可用上面的 scripts/start-all 一键脚本）
 dsh web                      # DSH 本体（127.0.0.1:3080）
 node src/index.js            # 桥接（127.0.0.1:8787）
-tailscale serve --bg 8788    # 或 cloudflared 隧道
+tailscale serve --bg 8787    # 或 cloudflared 隧道
 ```
 
 前端与桥接回归测试使用 Node 标准库和本机 Microsoft Edge，不需要安装 npm 依赖：

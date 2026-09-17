@@ -10,8 +10,8 @@ param([switch]$Silent)
 
 $ErrorActionPreference = 'SilentlyContinue'
 
-# ---- 路径配置（换机器时改这里）----
-$BridgeDir = "D:\Software\AI Tools\DeepSeek Harness\dsh-roam"
+# ---- 从脚本位置推导项目目录（可移植）----
+$BridgeDir = Split-Path $PSScriptRoot -Parent
 
 # 端口是否在监听
 function Test-Port([int]$Port) {
@@ -29,7 +29,7 @@ if (Test-Port 3080) {
   Start-Sleep -Seconds 2
 }
 
-# ---- 2. 桥接 (8787，监听所有网卡，Tailscale 可连) ----
+# ---- 2. 桥接 (8787，仅 loopback；由 Tailscale Serve 转发) ----
 if (Test-Port 8787) {
   Write-Host "[2/3] 桥接          已在运行 (8787)" -ForegroundColor Green
 } else {
@@ -42,13 +42,13 @@ if (Test-Port 8787) {
 $serveActive = $false
 try {
   $out = tailscale serve status 2>&1 | Out-String
-  if ($out -match '8788') { $serveActive = $true }
+  if ($out -match '8787') { $serveActive = $true }
 } catch {}
 if ($serveActive) {
   Write-Host "[3/3] Tailscale Serve  已启用" -ForegroundColor Green
 } else {
   Write-Host "[3/3] 启用 Tailscale Serve（HTTPS 代理 8787）..." -ForegroundColor Yellow
-  tailscale serve --bg 8788 2>&1 | Select-Object -First 6
+  tailscale serve --bg 8787 2>&1 | Select-Object -First 6
   Start-Sleep -Seconds 3
 }
 
