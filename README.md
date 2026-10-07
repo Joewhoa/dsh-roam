@@ -1,5 +1,7 @@
 # dsh-roam
 
+> ⚠️ **已归档（2026-10）**：本项目已停止维护。远程访问 DSH 的能力已由**官方桌面端的 Agent Anywhere** 接手；本仓库保留作为**求职作品集**参考，代码仍可自托管使用，但不再更新。
+
 把本机 **DeepSeek Harness (DSH)** 装进口袋：一个自托管的响应式网页，让你在手机上继续操作电脑上正在运行的 DSH agent——看会话、流式聊天、回复提问/审批、切换模型、查余额。
 
 [![CI](https://github.com/Joewhoa/dsh-roam/actions/workflows/ci.yml/badge.svg)](https://github.com/Joewhoa/dsh-roam/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
